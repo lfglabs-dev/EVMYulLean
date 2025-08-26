@@ -171,14 +171,9 @@ mutual
         -- (https://docs.soliditylang.org/en/latest/yul.html#restrictions-on-the-grammar)
         --
         -- Thus, we cannot have literals or variables on the RHS.
-        | .ExprStmtCall expr =>
-            match expr with
-              | .Call (Sum.inl prim) args =>
-                execPrimCall prim [] (reverse' (evalArgs fuel' args.reverse s))
-              | .Call (Sum.inr yulFunctionName) args =>
-                execCall fuel' yulFunctionName [] (reverse' (evalArgs fuel' args.reverse s))
-              | .Var _ => s
-              | .Lit _ => s
+        | .ExprStmtCall f args => execCall fuel' f [] (reverse' (evalArgs fuel' args.reverse s))
+        
+        | .ExprStmtPrimCall prim args => execPrimCall prim [] (reverse' (evalArgs fuel' args.reverse s))
 
         | .Switch cond cases' default' =>
 

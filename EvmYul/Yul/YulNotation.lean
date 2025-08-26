@@ -336,9 +336,9 @@ partial def translateStmt (stmt : TSyntax `stmt) : TermElabM Term :=
     match f' with
       | .inl primOp =>
         let primOp ← translatePrimOp primOp
-        `(Stmt.ExprStmtCall (Expr.Call (Sum.inl $primOp) [$es',*]))
+        `(Stmt.ExprStmtPrimCall $primOp [$es',*])
       | .inr _ =>
-        `(Stmt.ExprStmtCall (Expr.Call (Sum.inr $f) [$es',*]))
+        `(Stmt.ExprStmtCall $f [$es',*])
 
   -- For
   | `(stmt| for {} $cond:expr {$post:stmt*} {$body:stmt*}) => do
@@ -462,7 +462,7 @@ example : <s
 > = Stmt.Switch (Expr.Var "a") [(⟨42⟩, [.Continue])] [.Break] := rfl
 
 example : <s let a, b, c > = Stmt.Let ["a", "b", "c"] := rfl
-example : <s revert(0, 0) > = Stmt.ExprStmtCall (Expr.Call (Sum.inl (.System (.REVERT))) [(Expr.Lit ⟨0⟩), (Expr.Lit ⟨0⟩)]) := rfl
+example : <s revert(0, 0) > = Stmt.ExprStmtPrimCall (.System (.REVERT)) [(Expr.Lit ⟨0⟩), (Expr.Lit ⟨0⟩)] := rfl
 example : <s if 1 { leave } > = Stmt.If (.Lit ⟨1⟩) [Stmt.Leave] := rfl
 example : <s {
     if 1 { leave }
