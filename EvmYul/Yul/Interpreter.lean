@@ -157,19 +157,9 @@ mutual
             | .Var identifier => s.insert vars.head! s[identifier]! -- It should be safe to call head! here if the Yul code is parsed correctly.
             | .Lit literal => s.insert vars.head! literal -- It should be safe to call head! here if the Yul code is parsed correctly.
 
-        | .Assign var rhs =>
-          let (s, x) := eval fuel' rhs s
-          s.insert var x
+        | .Assign var rhs => exec fuel' (.LetEq var rhs) s
 
-        | .AssignCall vars expr =>
-            match expr with
-            | .Call (Sum.inl prim) args =>
-              execPrimCall prim vars (reverse' (evalArgs fuel' args.reverse s))
-            | .Call (Sum.inr yulFunctionName) args =>
-              execCall fuel' yulFunctionName vars (reverse' (evalArgs fuel' args.reverse s))
-            | .Var identifier => s.insert vars.head! s[identifier]! -- It should be safe to call head! here if the Yul code is parsed correctly.
-            | .Lit literal => s.insert vars.head! literal -- It should be safe to call head! here if the Yul code is parsed correctly.
-
+        | .AssignCall vars expr => exec fuel' (.LetCall vars expr) s
 
         | .If cond body =>
           let (s, cond) := eval fuel' cond s
