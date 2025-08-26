@@ -30,6 +30,8 @@ instance : ToString PrimOp := ⟨stringOfPrimOp⟩
 
 -- https://docs.soliditylang.org/en/latest/yul.html#informal-description-of-yul
 
+abbrev YulFunctionName := String
+
 mutual
   inductive FunctionDefinition where
     | Def : List Identifier → List Identifier → List Stmt → FunctionDefinition
@@ -37,7 +39,7 @@ mutual
 
   inductive Expr where
     | PrimCall : PrimOp → List Expr → Expr
-    | Call : FunctionDefinition → List Expr → Expr
+    | Call : YulFunctionName → List Expr → Expr
     | Var : Identifier → Expr
     | Lit : Literal → Expr
 
@@ -47,12 +49,12 @@ mutual
     | Block : List Stmt → Stmt
     | Let : List Identifier → Stmt
     | LetEq : Identifier → Expr → Stmt
-    | LetCall : List Identifier → FunctionDefinition → List Expr → Stmt
+    | LetCall : List Identifier → YulFunctionName → List Expr → Stmt
     | LetPrimCall : List Identifier → PrimOp → List Expr → Stmt
     | Assign : Identifier → Expr → Stmt
-    | AssignCall : List Identifier → FunctionDefinition → List Expr → Stmt
+    | AssignCall : List Identifier → YulFunctionName → List Expr → Stmt
     | AssignPrimCall : List Identifier → PrimOp → List Expr → Stmt
-    | ExprStmtCall : FunctionDefinition → List Expr -> Stmt
+    | ExprStmtCall : YulFunctionName → List Expr -> Stmt
     | ExprStmtPrimCall : PrimOp → List Expr -> Stmt
     | Switch : Expr → List (Literal × List Stmt) → List Stmt → Stmt
     | For : Expr → List Stmt → List Stmt → Stmt
@@ -63,11 +65,9 @@ mutual
     deriving BEq, Inhabited, Repr
 end
 
-abbrev yulFunctionName := String
-
 structure YulContract where
   dispatcher : Yul.Ast.Stmt
-  functions : Finmap (fun (_ : yulFunctionName) ↦ Yul.Ast.FunctionDefinition)
+  functions : Finmap (fun (_ : YulFunctionName) ↦ Yul.Ast.FunctionDefinition)
   deriving Inhabited
 
 instance : Repr YulContract where
