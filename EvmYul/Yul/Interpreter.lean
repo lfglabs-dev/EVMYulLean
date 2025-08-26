@@ -59,10 +59,14 @@ mutual
   /--
     `call` executes a call of a user-defined function.
   -/
-  def call (fuel : Nat) (args : List Literal) (f : FunctionDefinition) (s : Yul.State) : Yul.State × List Literal :=
+  def call (fuel : Nat) (args : List Literal) (yulFunctionName : YulFunctionName) (s : Yul.State) : Yul.State × List Literal :=
     match fuel with
       | 0 => (.OutOfFuel, default)
       | .succ fuel' =>
+        -- This should never return `default` if the state is set up correctly.
+        let yulContract := (s.sharedState.accountMap.findD s.toSharedState.executionEnv.codeOwner default).code
+        -- This should never return `default` if the state is set up correctly.
+        let f := (yulContract.functions.lookup yulFunctionName) |>.getD default
         let s₁ := 👌 s.initcall f.params args
         let s₂ := exec fuel' (.Block f.body) s₁
         let s₃ := s₂.reviveJump.overwrite? s |>.setStore s
@@ -75,7 +79,7 @@ mutual
   def evalPrimCall (prim : PrimOp) : Yul.State × List Literal → Yul.State × Literal
     | (s, args) => head' (primCall s prim args)
 
-  def evalCall (fuel : Nat) (f : FunctionDefinition) : Yul.State × List Literal → Yul.State × Literal
+  def evalCall (fuel : Nat) (f : YulFunctionName) : Yul.State × List Literal → Yul.State × Literal
     | (s, args) =>
       match fuel with
       | 0 => (.OutOfFuel, default)
@@ -84,11 +88,11 @@ mutual
   def execPrimCall (prim : PrimOp) (vars : List Identifier) : Yul.State × List Literal → Yul.State
     | (s, args) => multifill' vars (primCall s prim args)
 
-  def execCall (fuel : Nat) (f : FunctionDefinition) (vars : List Identifier) : Yul.State × List Literal → Yul.State
+  def execCall (fuel : Nat) (yulFunctionName : YulFunctionName) (vars : List Identifier) : Yul.State × List Literal → Yul.State
     | (s, args) =>
       match fuel with
       | 0 => .OutOfFuel
-      | .succ fuel' => multifill' vars (call fuel' args f s)
+      | .succ fuel' => multifill' vars (call fuel' args yulFunctionName s)
 
   /--
     `execSwitchCases` executes each case of a `switch` statement.
@@ -119,11 +123,9 @@ mutual
         --  4. for {...} f() ...   (for conditions)
         --  5. switch f() ...      (switch conditions)
 
-        | .PrimCall prim args => evalPrimCall prim (reverse' (evalArgs fuel' args.reverse s))
-        | .Call yulFunctionName args        => 
-            let yulContract := (s.sharedState.accountMap.findD s.toSharedState.executionEnv.codeOwner default).code -- This should never return `default` if the state is set up correctly.
-            let f := (yulContract.functions.lookup yulFunctionName) |>.getD default -- This should never return `default` if the state is set up correctly.
-          evalCall fuel' f (reverse' (evalArgs fuel' args.reverse s))
+        | .Call (Sum.inl prim) args => evalPrimCall prim (reverse' (evalArgs fuel' args.reverse s))
+        | .Call (Sum.inr yulFunctionName) args        =>
+          evalCall fuel' yulFunctionName (reverse' (evalArgs fuel' args.reverse s))
         | .Var id             => (s, s[id]!)
         | .Lit val            => (s, val)
 
@@ -146,23 +148,28 @@ mutual
           let (s, val) := eval fuel' rhs s
           s.insert var val
 
-        | .LetCall vars yulFunctionName args =>
-            let yulContract := (s.sharedState.accountMap.findD s.toSharedState.executionEnv.codeOwner default).code -- This should never return `default` if the state is set up correctly.
-            let f := (yulContract.functions.lookup yulFunctionName) |>.getD default -- This should never return `default` if the state is set up correctly.
-            execCall fuel' f vars (reverse' (evalArgs fuel' args.reverse s))
-
-        | .LetPrimCall vars prim args => execPrimCall prim vars (reverse' (evalArgs fuel' args.reverse s))
+        | .LetCall vars expr =>
+            match expr with
+            | .Call (Sum.inl prim) args =>
+              execPrimCall prim vars (reverse' (evalArgs fuel' args.reverse s))
+            | .Call (Sum.inr yulFunctionName) args =>
+              execCall fuel' yulFunctionName vars (reverse' (evalArgs fuel' args.reverse s))
+            | .Var identifier => s.insert vars.head! s[identifier]! -- It should be safe to call head! here if the Yul code is parsed correctly.
+            | .Lit literal => s.insert vars.head! literal -- It should be safe to call head! here if the Yul code is parsed correctly.
 
         | .Assign var rhs =>
           let (s, x) := eval fuel' rhs s
           s.insert var x
 
-        | .AssignCall vars yulFunctionName args =>
-            let yulContract := (s.sharedState.accountMap.findD s.toSharedState.executionEnv.codeOwner default).code -- This should never return `default` if the state is set up correctly.
-            let f := (yulContract.functions.lookup yulFunctionName) |>.getD default -- This should never return `default` if the state is set up correctly.
-            execCall fuel' f vars (reverse' (evalArgs fuel' args.reverse s))
+        | .AssignCall vars expr =>
+            match expr with
+            | .Call (Sum.inl prim) args =>
+              execPrimCall prim vars (reverse' (evalArgs fuel' args.reverse s))
+            | .Call (Sum.inr yulFunctionName) args =>
+              execCall fuel' yulFunctionName vars (reverse' (evalArgs fuel' args.reverse s))
+            | .Var identifier => s.insert vars.head! s[identifier]! -- It should be safe to call head! here if the Yul code is parsed correctly.
+            | .Lit literal => s.insert vars.head! literal -- It should be safe to call head! here if the Yul code is parsed correctly.
 
-        | .AssignPrimCall vars prim args => execPrimCall prim vars (reverse' (evalArgs fuel' args.reverse s))
 
         | .If cond body =>
           let (s, cond) := eval fuel' cond s
@@ -174,11 +181,14 @@ mutual
         -- (https://docs.soliditylang.org/en/latest/yul.html#restrictions-on-the-grammar)
         --
         -- Thus, we cannot have literals or variables on the RHS.
-        | .ExprStmtCall yulFunctionName args =>
-            let yulContract := (s.sharedState.accountMap.findD s.toSharedState.executionEnv.codeOwner default).code -- This should never return `default` if the state is set up correctly.
-            let f := (yulContract.functions.lookup yulFunctionName) |>.getD default -- This should never return `default` if the state is set up correctly.
-            execCall fuel' f [] (reverse' (evalArgs fuel' args.reverse s))
-        | .ExprStmtPrimCall prim args => execPrimCall prim [] (reverse' (evalArgs fuel' args.reverse s))
+        | .ExprStmtCall expr =>
+            match expr with
+              | .Call (Sum.inl prim) args =>
+                execPrimCall prim [] (reverse' (evalArgs fuel' args.reverse s))
+              | .Call (Sum.inr yulFunctionName) args =>
+                execCall fuel' yulFunctionName [] (reverse' (evalArgs fuel' args.reverse s))
+              | .Var _ => s
+              | .Lit _ => s
 
         | .Switch cond cases' default' =>
 
