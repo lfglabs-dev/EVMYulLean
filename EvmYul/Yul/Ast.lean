@@ -66,7 +66,7 @@ end
 abbrev yulFunctionName := String
 
 structure YulContract where
-  dispatcher : Finmap (fun (_ : UInt256) ↦ yulFunctionName)
+  dispatcher : Yul.Ast.Stmt
   functions : Finmap (fun (_ : yulFunctionName) ↦ Yul.Ast.FunctionDefinition)
   deriving Inhabited
 
