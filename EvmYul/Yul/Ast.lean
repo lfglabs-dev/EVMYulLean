@@ -38,8 +38,7 @@ mutual
   deriving BEq, Inhabited
 
   inductive Expr where
-    | PrimCall : PrimOp → List Expr → Expr
-    | Call : YulFunctionName → List Expr → Expr
+    | Call : (PrimOp ⊕ YulFunctionName) → List Expr → Expr
     | Var : Identifier → Expr
     | Lit : Literal → Expr
 
@@ -49,13 +48,10 @@ mutual
     | Block : List Stmt → Stmt
     | Let : List Identifier → Stmt
     | LetEq : Identifier → Expr → Stmt
-    | LetCall : List Identifier → YulFunctionName → List Expr → Stmt
-    | LetPrimCall : List Identifier → PrimOp → List Expr → Stmt
+    | LetCall : List Identifier → Expr → Stmt
     | Assign : Identifier → Expr → Stmt
-    | AssignCall : List Identifier → YulFunctionName → List Expr → Stmt
-    | AssignPrimCall : List Identifier → PrimOp → List Expr → Stmt
-    | ExprStmtCall : YulFunctionName → List Expr -> Stmt
-    | ExprStmtPrimCall : PrimOp → List Expr -> Stmt
+    | AssignCall : List Identifier → Expr → Stmt
+    | ExprStmtCall : Expr -> Stmt
     | Switch : Expr → List (Literal × List Stmt) → List Stmt → Stmt
     | For : Expr → List Stmt → List Stmt → Stmt
     | If : Expr → List Stmt → Stmt
