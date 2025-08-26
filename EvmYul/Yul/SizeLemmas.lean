@@ -92,11 +92,11 @@ lemma Stmt.zero_lt_sizeOf_List : 0 < sizeOf stmts := by cases stmts <;> aesop
 lemma FunctionDefinition.zero_lt_sizeOf : 0 < sizeOf f := by cases f; aesop
 
 @[simp]
-lemma Expr.sizeOf_args_lt_sizeOf_Call : sizeOf args < sizeOf (Call fName args) := by
+lemma Expr.sizeOf_args_lt_sizeOf_Call : sizeOf args < sizeOf (Call (Sum.inr fName) args) := by
   simp
 
 @[simp]
-lemma Expr.sizeOf_args_lt_sizeOf_PrimCall : sizeOf args < sizeOf (PrimCall prim args) := by
+lemma Expr.sizeOf_args_lt_sizeOf_PrimCall : sizeOf args < sizeOf (Call (Sum.inl prim) args) := by
   simp
 
 /--
