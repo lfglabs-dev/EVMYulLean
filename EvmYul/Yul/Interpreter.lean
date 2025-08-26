@@ -146,16 +146,6 @@ mutual
         | .LetCall vars f args => execCall fuel' f vars (reverse' (evalArgs fuel' args.reverse s))
 
         | .LetPrimCall vars prim args => execPrimCall prim vars (reverse' (evalArgs fuel' args.reverse s))
-        
-        | .ExternalCall vars accountAddress v args =>
-            let calldata := State.calldataload s.toState v
-            let yulContract := (s.sharedState.accountMap.findD accountAddress default).code
-            match yulContract.dispatcher.lookup calldata with
-              | .some fName =>
-                  match (yulContract.functions.lookup fName) with
-                    | .some f => execCall fuel' f vars (reverse' (evalArgs fuel' args.reverse s))
-                    | .none => default -- TODO: Decide how to handle if a function is not found
-              | .none => default -- TODO: Decide how to handle if a contract is not found
 
         | .Assign var rhs =>
           let (s, x) := eval fuel' rhs s

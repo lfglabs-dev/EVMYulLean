@@ -49,7 +49,6 @@ mutual
     | LetEq : Identifier → Expr → Stmt
     | LetCall : List Identifier → FunctionDefinition → List Expr → Stmt
     | LetPrimCall : List Identifier → PrimOp → List Expr → Stmt
-    | ExternalCall : List Identifier → AccountAddress → UInt256 → List Expr → Stmt
     | Assign : Identifier → Expr → Stmt
     | AssignCall : List Identifier → FunctionDefinition → List Expr → Stmt
     | AssignPrimCall : List Identifier → PrimOp → List Expr → Stmt
