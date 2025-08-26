@@ -120,7 +120,10 @@ mutual
         --  5. switch f() ...      (switch conditions)
 
         | .PrimCall prim args => evalPrimCall prim (reverse' (evalArgs fuel' args.reverse s))
-        | .Call f args        => evalCall fuel' f (reverse' (evalArgs fuel' args.reverse s))
+        | .Call yulFunctionName args        => 
+            let yulContract := (s.sharedState.accountMap.findD s.toSharedState.executionEnv.codeOwner default).code -- This should never return `default` if the state is set up correctly.
+            let f := (yulContract.functions.lookup yulFunctionName) |>.getD default -- This should never return `default` if the state is set up correctly.
+          evalCall fuel' f (reverse' (evalArgs fuel' args.reverse s))
         | .Var id             => (s, s[id]!)
         | .Lit val            => (s, val)
 
@@ -143,7 +146,10 @@ mutual
           let (s, val) := eval fuel' rhs s
           s.insert var val
 
-        | .LetCall vars f args => execCall fuel' f vars (reverse' (evalArgs fuel' args.reverse s))
+        | .LetCall vars yulFunctionName args =>
+            let yulContract := (s.sharedState.accountMap.findD s.toSharedState.executionEnv.codeOwner default).code -- This should never return `default` if the state is set up correctly.
+            let f := (yulContract.functions.lookup yulFunctionName) |>.getD default -- This should never return `default` if the state is set up correctly.
+            execCall fuel' f vars (reverse' (evalArgs fuel' args.reverse s))
 
         | .LetPrimCall vars prim args => execPrimCall prim vars (reverse' (evalArgs fuel' args.reverse s))
 
@@ -151,7 +157,10 @@ mutual
           let (s, x) := eval fuel' rhs s
           s.insert var x
 
-        | .AssignCall vars f args => execCall fuel' f vars (reverse' (evalArgs fuel' args.reverse s))
+        | .AssignCall vars yulFunctionName args =>
+            let yulContract := (s.sharedState.accountMap.findD s.toSharedState.executionEnv.codeOwner default).code -- This should never return `default` if the state is set up correctly.
+            let f := (yulContract.functions.lookup yulFunctionName) |>.getD default -- This should never return `default` if the state is set up correctly.
+            execCall fuel' f vars (reverse' (evalArgs fuel' args.reverse s))
 
         | .AssignPrimCall vars prim args => execPrimCall prim vars (reverse' (evalArgs fuel' args.reverse s))
 
@@ -165,7 +174,10 @@ mutual
         -- (https://docs.soliditylang.org/en/latest/yul.html#restrictions-on-the-grammar)
         --
         -- Thus, we cannot have literals or variables on the RHS.
-        | .ExprStmtCall f args => execCall fuel' f [] (reverse' (evalArgs fuel' args.reverse s))
+        | .ExprStmtCall yulFunctionName args =>
+            let yulContract := (s.sharedState.accountMap.findD s.toSharedState.executionEnv.codeOwner default).code -- This should never return `default` if the state is set up correctly.
+            let f := (yulContract.functions.lookup yulFunctionName) |>.getD default -- This should never return `default` if the state is set up correctly.
+            execCall fuel' f [] (reverse' (evalArgs fuel' args.reverse s))
         | .ExprStmtPrimCall prim args => execPrimCall prim [] (reverse' (evalArgs fuel' args.reverse s))
 
         | .Switch cond cases' default' =>
