@@ -31,13 +31,51 @@ def reverse' : Yul.State × List Literal → Yul.State × List Literal
 def multifill' (vars : List Identifier) : Yul.State × List Literal → Yul.State
   | (s, rets) => s.multifill vars rets
 
+mutual
 /--
 TODO: Temporary EvmYul artefact with separate primop implementations.
 -/
-abbrev primCall (s : Yul.State) (prim : Operation .Yul) (args : List Literal) :=
-  step prim .none s args |>.toOption.map (λ (s, lit) ↦ (s, lit.toList)) |>.getD default
+def primCall (fuel : ℕ) (s₀ : Yul.State) (prim : Operation .Yul) (args : List Literal) : Yul.State × List Literal :=
+    match fuel with
+    | 0 => (.OutOfFuel, default)
+    | .succ fuel₁ => 
+      match prim with
+      | .CALL =>
+        match args with
+          | _ :: address_arg :: value :: inOffset :: inSize :: outOffset :: outSize :: _ =>
+            let address := AccountAddress.ofUInt256 address_arg
+            let calldata₁ := s₀.toMachineState.memory.readWithPadding inOffset.toNat inSize.toNat
+            let accountMap₁ := (s₀.sharedState.accountMap.transferBalance .Yul s₀.executionEnv.codeOwner address value)
+            match accountMap₁ with
+              | .none => (s₀, [⟨0⟩]) -- Insufficient funds, revert and return 0 to indicate error
+              | .some _ =>
+                match s₀ with
+                | .OutOfFuel => (.OutOfFuel, [⟨0⟩])
+                | .Checkpoint j => (.Checkpoint j, [⟨0⟩])
+                | .Ok sharedState varstore =>
+                    let executionEnv₁ := { sharedState.executionEnv with
+                                              calldata := calldata₁,
+                                              code := (s₀.sharedState.accountMap.findD address default).code,
+                                              codeOwner := address,
+                                              source := s₀.executionEnv.codeOwner,
+                                              weiValue := value
+                                          }
+                    let sharedState₁ := { sharedState with executionEnv := executionEnv₁ }
+                    let s₁ : Yul.State := .Ok sharedState₁ default
+                    let (s₂, _) := call fuel₁ [] .none s₁
+                    let memory₃ := ByteArray.write s₂.toMachineState.H_return 0 s₂.toMachineState.memory outOffset.toNat outSize.toNat
+                    match s₂ with
+                      | .OutOfFuel => (.OutOfFuel, [⟨0⟩])
+                      | .Checkpoint j => (.Checkpoint j, [⟨0⟩])
+                      | .Ok sharedState₂ _ =>
+                        let sharedState₃ := { sharedState₂ with
+                                                memory := memory₃,
+                                                returnData := s₂.toMachineState.H_return
+                                             }
+                        (.Ok sharedState₃ varstore, [⟨1⟩])
+          | _ => default -- Incorrect number of arguments, this case should be impossible if the Yul code is parsed correctly
+      | _ => step prim .none s₀ args |>.toOption.map (λ (s, lit) ↦ (s, lit.toList)) |>.getD default
 
-mutual
   def evalTail (fuel : Nat) (args : List Expr) : Yul.State × Literal → Yul.State × List Literal
     | (s, arg) => 
       match fuel with
@@ -59,14 +97,17 @@ mutual
   /--
     `call` executes a call of a user-defined function.
   -/
-  def call (fuel : Nat) (args : List Literal) (yulFunctionName : YulFunctionName) (s : Yul.State) : Yul.State × List Literal :=
+  def call (fuel : Nat) (args : List Literal) (yulFunctionNameOption : Option YulFunctionName) (s : Yul.State) : Yul.State × List Literal :=
     match fuel with
       | 0 => (.OutOfFuel, default)
       | .succ fuel' =>
         -- This should never return `default` if the state is set up correctly.
         let yulContract := (s.sharedState.accountMap.findD s.toSharedState.executionEnv.codeOwner default).code
         -- This should never return `default` if the state is set up correctly.
-        let f := (yulContract.functions.lookup yulFunctionName) |>.getD default
+        let f := match yulFunctionNameOption with
+                   | .none => FunctionDefinition.Def [] [] [yulContract.dispatcher]
+                   | .some yulFunctionName =>
+                      ((yulContract.functions.lookup yulFunctionName) |>.getD default)
         let s₁ := 👌 s.initcall f.params args
         let s₂ := exec fuel' (.Block f.body) s₁
         let s₃ := s₂.reviveJump.overwrite? s |>.setStore s
@@ -76,8 +117,8 @@ mutual
   -- error when coarity is > 0 in (1) and when coarity is > 1 in all other
   -- cases.
 
-  def evalPrimCall (prim : PrimOp) : Yul.State × List Literal → Yul.State × Literal
-    | (s, args) => head' (primCall s prim args)
+  def evalPrimCall (fuel : ℕ) (prim : PrimOp) : Yul.State × List Literal → Yul.State × Literal
+    | (s, args) => head' (primCall fuel s prim args)
 
   def evalCall (fuel : Nat) (f : YulFunctionName) : Yul.State × List Literal → Yul.State × Literal
     | (s, args) =>
@@ -85,8 +126,8 @@ mutual
       | 0 => (.OutOfFuel, default)
       | .succ fuel' => head' (call fuel' args f s)
 
-  def execPrimCall (prim : PrimOp) (vars : List Identifier) : Yul.State × List Literal → Yul.State
-    | (s, args) => multifill' vars (primCall s prim args)
+  def execPrimCall (fuel : ℕ) (prim : PrimOp) (vars : List Identifier) : Yul.State × List Literal → Yul.State
+    | (s, args) => multifill' vars (primCall fuel s prim args)
 
   def execCall (fuel : Nat) (yulFunctionName : YulFunctionName) (vars : List Identifier) : Yul.State × List Literal → Yul.State
     | (s, args) =>
@@ -123,7 +164,7 @@ mutual
         --  4. for {...} f() ...   (for conditions)
         --  5. switch f() ...      (switch conditions)
 
-        | .Call (Sum.inl prim) args => evalPrimCall prim (reverse' (evalArgs fuel' args.reverse s))
+        | .Call (Sum.inl prim) args => evalPrimCall fuel' prim (reverse' (evalArgs fuel' args.reverse s))
         | .Call (Sum.inr yulFunctionName) args        =>
           evalCall fuel' yulFunctionName (reverse' (evalArgs fuel' args.reverse s))
         | .Var id             => (s, s[id]!)
@@ -148,7 +189,7 @@ mutual
               | .some expr =>
                 match expr with
                   | .Call (Sum.inl prim) args =>
-                    execPrimCall prim vars (reverse' (evalArgs fuel' args.reverse s))
+                    execPrimCall fuel' prim vars (reverse' (evalArgs fuel' args.reverse s))
                   | .Call (Sum.inr yulFunctionName) args =>
                     execCall fuel' yulFunctionName vars (reverse' (evalArgs fuel' args.reverse s))
                   | .Var identifier => s.insert vars.head! s[identifier]! -- It should be safe to call head! here if the Yul code is parsed correctly.
@@ -166,7 +207,7 @@ mutual
         -- Thus, we cannot have literals or variables on the RHS.
         | .ExprStmtCall expr =>
              match expr with
-               | .Call (Sum.inl prim) args => execPrimCall prim [] (reverse' (evalArgs fuel' args.reverse s))
+               | .Call (Sum.inl prim) args => execPrimCall fuel' prim [] (reverse' (evalArgs fuel' args.reverse s))
                | .Call (Sum.inr f) args => execCall fuel' f [] (reverse' (evalArgs fuel' args.reverse s))
                | _ => default -- This case should never occur because we cannot have literals or variables on the RHS, as noted above.
 

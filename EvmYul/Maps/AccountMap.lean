@@ -43,6 +43,25 @@ def AccountMap.increaseBalance (τ : OperationType) (σ : AccountMap τ) (addr :
     | none => σ.insert addr {(default : Account τ) with balance := amount}
     | some acc => σ.insert addr {acc with balance := acc.balance + amount}
 
+/--
+  Returns `none` in the case of an underflow.
+-/
+def AccountMap.decreaseBalance (τ : OperationType) (σ : AccountMap τ) (addr : AccountAddress) (amount : UInt256)
+  : Option (AccountMap τ)
+:=
+  match σ.find? addr with
+    | none => .none
+    | some acc => σ.insert addr {acc with balance := acc.balance - amount}
+
+/--
+  Returns `none` in the case of an underflow.
+-/
+def AccountMap.transferBalance (τ : OperationType) (σ : AccountMap τ) (from_addr to_addr : AccountAddress) (amount : UInt256)
+  : Option (AccountMap τ)
+:=
+  σ.increaseBalance τ to_addr amount
+  |>.decreaseBalance τ from_addr amount
+
 def toExecute (τ : OperationType) (σ : AccountMap τ) (t : AccountAddress) : ToExecute τ :=
   if /- t is a precompiled account -/ t ∈ π then
     ToExecute.Precompiled t
