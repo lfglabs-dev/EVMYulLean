@@ -114,6 +114,9 @@ scoped syntax:max "<s" stmt ">" : term
 scoped syntax:max "<ss" stmt ">" : term
 scoped syntax:max "<params" params_list ">" : term
 
+def translateString (s : String) : TermElabM Term := 
+  pure (Syntax.mkStrLit s)
+
 partial def translatePrimOp (primOp : PrimOp) : TermElabM Term := do
   let (family, instr) ← familyAndInstr primOp
   PrettyPrinter.delab (
@@ -211,8 +214,9 @@ partial def translateExpr (expr : TSyntax `expr) : TermElabM Term :=
         | .inl primOp =>
           let primOp ← translatePrimOp primOp
           `(Expr.Call (Sum.inl $primOp) [$args',*])
-        | .inr _ =>
-          `(Expr.Call (Sum.inr $name) [$args',*])
+        | .inr yulFunctionName =>
+          let yulFunctionName ← translateString yulFunctionName
+          `(Expr.Call (Sum.inr $yulFunctionName) [$args',*])
     | _ => throwError "unknown expr"
 
 partial def translateExpr' (expr : TSyntax `expr) : TermElabM Term :=
@@ -259,11 +263,6 @@ partial def translateStmt (stmt : TSyntax `stmt) : TermElabM Term :=
     let body' ← body.mapM translateStmt
     `(Stmt.If $cond' [$body',*])
 
-  -- Function Definition
-  | `(stmt| $fdef:function_definition) => do
-    let fdef' ← translateFdef fdef
-    `(Stmt.FunctionDefinition $fdef')
-
   -- Switch
   | `(stmt| switch $expr:expr $[case $lits { $cs:stmt* }]* $[default { $dflts:stmt* }]?) => do
     let expr ← translateExpr expr
@@ -283,23 +282,17 @@ partial def translateStmt (stmt : TSyntax `stmt) : TermElabM Term :=
     let dflt ← dflts.mapM translateStmt
     `(Stmt.Switch $expr [] ([$dflt,*]))
 
-  -- LetCall
-  | `(stmt| let $ids:ident,* := $f:ident ( $es:expr,* )) => do
+  -- Let
+  | `(stmt| let $ids:ident,* := $expr:expr) => do
     let ids' := (ids : TSyntaxArray _).map translateIdent
-    let f' := parseFunction (TSyntax.getId f).lastComponentAsString
-    let es' ← (es : TSyntaxArray _).mapM translateExpr
-    match f' with
-      | .inl primOp =>
-        let primOp ← translatePrimOp primOp
-        `(Stmt.Let [$ids',*] (.some (Expr.Call (Sum.inl $primOp) [$es',*])))
-      | .inr _ =>
-        `(Stmt.Let [$ids',*] (.some (Expr.Call (Sum.inr $f) [$es',*])))
+    let expr ← translateExpr expr
+    `(Stmt.Let [$ids',*] (.some $expr))
 
   -- LetEq
-  | `(stmt| let $idn:ident := $init:expr) => do
-    let idn' := translateIdent idn
-    let expr' ← translateExpr init
-    `(Stmt.Let [$idn'] (.some $expr'))
+  -- | `(stmt| let $idn:ident := $init:expr) => do
+  --   let idn' := translateIdent idn
+  --   let expr' ← translateExpr init
+  --   `(Stmt.Let [$idn'] (.some $expr'))
 
   -- TODO(fix)
   -- | `(stmt| let $idn:ident := $s:str) => do
@@ -312,33 +305,15 @@ partial def translateStmt (stmt : TSyntax `stmt) : TermElabM Term :=
     `(Stmt.Let [$ids',*] .none)
 
   -- AssignCall
-  | `(stmt| $ids:ident,* := $f:ident ( $es:expr,* )) => do
+  | `(stmt| $ids:ident,* := $expr:expr) => do
     let ids' := (ids : TSyntaxArray _).map translateIdent
-    let f' := parseFunction (TSyntax.getId f).lastComponentAsString
-    let es' ← (es : TSyntaxArray _).mapM translateExpr
-    match f' with
-      | .inl primOp =>
-        let primOp ← translatePrimOp primOp
-        `(Stmt.Let [$ids',*] (.some (Expr.Call (Sum.inl $primOp) [$es',*])))
-      | .inr _ =>
-        `(Stmt.Let [$ids',*] (.some (Expr.Call (Sum.inr $f) [$es',*])))
-
-  -- Assign
-  | `(stmt| $idn:ident := $init:expr) => do
-    let idn' := translateIdent idn
-    let expr' ← translateExpr init
-    `(Stmt.Let [$idn'] (.some $expr'))
+    let expr ← translateExpr expr
+    `(Stmt.Let [$ids',*] (.some $expr))
 
   -- ExprStmt
-  | `(stmt| $f:ident ( $es:expr,* )) => do
-    let f' := parseFunction (TSyntax.getId f).lastComponentAsString
-    let es' ← (es : TSyntaxArray _).mapM translateExpr
-    match f' with
-      | .inl primOp =>
-        let primOp ← translatePrimOp primOp
-        `(Stmt.ExprStmtCall (Expr.Call (Sum.inl $primOp) [$es',*]))
-      | .inr _ =>
-        `(Stmt.ExprStmtCall (Expr.Call (Sum.inr $f) [$es',*]))
+  | `(stmt| $expr:expr) => do
+    let expr ← translateExpr expr
+    `(Stmt.ExprStmtCall $expr)
 
   -- For
   | `(stmt| for {} $cond:expr {$post:stmt*} {$body:stmt*}) => do
@@ -389,14 +364,15 @@ def f : FunctionDefinition := <f
   }
 >
 
+example : <<f(42)>> = (.Call (Sum.inr "f") [Expr.Lit ⟨42⟩]) := rfl
 example : <params [a,b,c] > = ["a", "b", "c"] := rfl
 example : << bar >> = Expr.Var "bar" := rfl
 example : << 42 >> = Expr.Lit ⟨42⟩ := rfl
 example : <s break > = Stmt.Break := rfl
--- example : <s let a, b := f(42) > = Stmt.LetCall ["a", "b"] f [Expr.Lit ⟨42⟩] := rfl -- TODO fix parser and this example
+example : <s let a, b := f(42) > = Stmt.Let ["a", "b"] (.some (.Call (Sum.inr "f") [Expr.Lit ⟨42⟩])) := rfl
 example : <s let a > = Stmt.Let ["a"] .none := rfl
 example : <s let a := 5 > = Stmt.Let ["a"] (.some (.Lit ⟨5⟩)) := rfl
--- example : <s a, b := f(42) > = Stmt.AssignCall ["a", "b"] f [Expr.Lit ⟨42⟩] := rfl -- TODO fix parser and this example
+example : <s a, b := f(42) > = Stmt.Let ["a", "b"] (.some (.Call (Sum.inr "f") [Expr.Lit ⟨42⟩])) := rfl
 example : <s a := 42 > = Stmt.Let ["a"] (.some (.Lit ⟨42⟩)) := rfl
 
 example : <s c := add(a, b) > = Stmt.Let ["c"] (.some (Expr.Call (Sum.inl (Operation.StopArith Operation.SAOp.ADD)) [Expr.Var "a", Expr.Var "b"])) := rfl
