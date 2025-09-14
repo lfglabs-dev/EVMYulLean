@@ -82,7 +82,7 @@ def primCall (fuel : ℕ) (s₀ : Yul.State) (prim : Operation .Yul) (args : Lis
                         let sharedState₁ := { sharedState with executionEnv := executionEnv₁ } -- memory should be reset for .CALL but left for .STATICCALL
                         let s₁ : Yul.State := .Ok sharedState₁ default
                         
-                        let (s₂, _) := call fuel₁ [] .none s₁
+                        let (s₂, _) := callFromCode fuel₁ [] .none s₁
                         
                         /- We note here that if:
                               `outOffset.toNat + (min outSize.toNat s₂.toMachineState.H_return.size) ≥ UInt256.size`
@@ -130,14 +130,34 @@ def primCall (fuel : ℕ) (s₀ : Yul.State) (prim : Operation .Yul) (args : Lis
     match fuel with
       | 0 => (.OutOfFuel, default)
       | .succ fuel' =>
-        -- This should never return `default`, since `primCall` checks if the address is in the `accountMap` before calling `call`, and other situations should not result in returning `default` if the state is set up correctly
+        -- Should not result in returning `default` if the state is set up correctly
         -- TODO: double check the above
         let yulContract := (s.sharedState.accountMap.findD s.toSharedState.executionEnv.codeOwner default).code
+        
+        match s with
+          | .OutOfFuel => (.OutOfFuel, [⟨0⟩])
+          | .Checkpoint j => (.Checkpoint j, [⟨0⟩])
+          | .Ok sharedState varstore =>
+              let executionEnv₁ := { sharedState.executionEnv with
+                                       code := yulContract
+                                   }
+              let sharedState₁ := { sharedState with executionEnv := executionEnv₁ }
+              let s₁ : Yul.State := .Ok sharedState₁ default
+              
+              callFromCode fuel' args yulFunctionNameOption s₁
+  
+  /--
+    `callFromCode` executes a call of a user-defined function, running `executionEnv.code`.  
+  -/
+  def callFromCode (fuel : Nat) (args : List Literal) (yulFunctionNameOption : Option YulFunctionName) (s : Yul.State) : Yul.State × List Literal :=
+    match fuel with
+      | 0 => (.OutOfFuel, default)
+      | .succ fuel' =>
         -- This should never return `default` if the state is set up correctly. Guaranteed by the compiler.
         let f := match yulFunctionNameOption with
-                   | .none => FunctionDefinition.Def [] [] [yulContract.dispatcher]
+                   | .none => FunctionDefinition.Def [] [] [s.executionEnv.code.dispatcher]
                    | .some yulFunctionName =>
-                      ((yulContract.functions.lookup yulFunctionName) |>.getD default)
+                      ((s.executionEnv.code.functions.lookup yulFunctionName) |>.getD default)
         let s₁ := 👌 s.initcall f.params args
         let s₂ := exec fuel' (.Block f.body) s₁
         let s₃ := s₂.reviveJump.overwrite? s |>.setStore s
