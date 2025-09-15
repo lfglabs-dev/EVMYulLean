@@ -79,7 +79,10 @@ def primCall (fuel : ℕ) (s₀ : Yul.State) (prim : Operation .Yul) (args : Lis
                                                   weiValue := value
                                                   depth := s₀.toSharedState.executionEnv.depth + 1
                                               }
-                        let sharedState₁ := { sharedState with executionEnv := executionEnv₁ } -- memory should be reset for .CALL but left for .STATICCALL
+                        let sharedState₁ := { sharedState with
+                                                executionEnv := executionEnv₁,
+                                                memory := default               
+                                            }
                         let s₁ : Yul.State := .Ok sharedState₁ default
                         
                         let (s₂, _) := callFromCode fuel₁ [] .none s₁
@@ -92,7 +95,7 @@ def primCall (fuel : ℕ) (s₀ : Yul.State) (prim : Operation .Yul) (args : Lis
                             And we expand the memory beyond the theoretical 2^256 bit max size if needed.
                             In practice, this is essentially impossible to occur due to the
                               prohibitively large gas cost of allocating this much memory. -/
-                        let memory₃ := s₂.toMachineState.H_return.copySlice 0 s₂.toMachineState.memory outOffset.toNat (min outSize.toNat s₂.toMachineState.H_return.size)
+                        let memory₃ := s₂.toMachineState.H_return.copySlice 0 s₀.toMachineState.memory outOffset.toNat (min outSize.toNat s₂.toMachineState.H_return.size)
                         match s₂ with
                           | .OutOfFuel => (.OutOfFuel, [⟨0⟩])
                           | .Checkpoint j => (.Checkpoint j, [⟨0⟩])
