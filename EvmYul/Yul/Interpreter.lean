@@ -225,6 +225,65 @@ def primCall (fuel : ℕ) (s₀ : Yul.State) (prim : Operation .Yul) (args : Lis
                                                   depth := s₀.toSharedState.executionEnv.depth + 1
                                               }
                         let sharedState₁ := { sharedState with
+                                                executionEnv := executionEnv₁,
+                                                accountMap := accountMap₁
+                                            }
+                        let s₁ : Yul.State := .Ok sharedState₁ default
+                        
+                        let (s₂, _) := callFromCode fuel₁ [] .none s₁
+                        
+                        /- We note here that if:
+                              `outOffset.toNat + (min outSize.toNat s₂.toMachineState.H_return.size) ≥ UInt256.size`
+                            then we are writing beyond the theoretical memory size limit.
+                            The yellow paper is unclear on the semantics of this (at the time of writing).
+                            We follow the https://github.com/NethermindEth/nethermind execution client (for example).
+                            And we expand the memory beyond the theoretical 2^256 bit max size if needed.
+                            In practice, this is essentially impossible to occur due to the
+                              prohibitively large gas cost of allocating this much memory. -/
+                        let memory₃ := s₂.toMachineState.H_return.copySlice 0 s₂.toMachineState.memory outOffset.toNat (min outSize.toNat s₂.toMachineState.H_return.size)
+                        match s₂ with
+                          | .OutOfFuel => (.OutOfFuel, [⟨0⟩])
+                          | .Checkpoint j => (.Checkpoint j, [⟨0⟩])
+                          | .Ok sharedState₂ _ =>
+                            let sharedState₃ := { sharedState₂ with
+                                                    memory := memory₃,
+                                                    returnData := s₂.toMachineState.H_return
+                                                }
+                            (.Ok sharedState₃ varstore, [⟨1⟩])
+          | _ => default -- Incorrect number of arguments, this case should be impossible if the Yul code is parsed correctly. Guaranteed by the compiler.
+      | .DELEGATECALL =>
+        match args with
+          | _ :: address_arg :: inOffset :: inSize :: outOffset :: outSize :: _ =>
+              let address := AccountAddress.ofUInt256 address_arg
+              let calldata₁ := s₀.toMachineState.memory.readWithPadding inOffset.toNat inSize.toNat
+              if s₀.toSharedState.executionEnv.depth ≥ 1024
+              then
+                match s₀ with
+                  | .OutOfFuel => (.OutOfFuel, [⟨0⟩])
+                  | .Checkpoint j => (.Checkpoint j, [⟨0⟩])
+                  | .Ok sharedState₀ varstore =>
+                    let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty }
+                    (.Ok sharedState₁ varstore, [⟨0⟩])  -- Insufficient funds or reached depth limit: return 0 to indicate error, with empty return data 
+              else
+                match s₀ with
+                | .OutOfFuel => (.OutOfFuel, [⟨0⟩])
+                | .Checkpoint j => (.Checkpoint j, [⟨0⟩])
+                | .Ok sharedState varstore =>
+                    match s₀.sharedState.accountMap.find? address with
+                      | .none => 
+                        match s₀ with
+                          | .OutOfFuel => (.OutOfFuel, [⟨0⟩])
+                          | .Checkpoint j => (.Checkpoint j, [⟨0⟩])
+                          | .Ok sharedState₀ varstore =>
+                            let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty }
+                            (.Ok sharedState₁ varstore, [⟨1⟩])  -- No contract at the provided address, return 1 to indicate success, with empty return data. (Like STOP opcode).
+                      | .some yulContract =>
+                        let executionEnv₁ := { sharedState.executionEnv with
+                                                  calldata := calldata₁,
+                                                  code := yulContract.code,
+                                                  depth := s₀.toSharedState.executionEnv.depth + 1
+                                              }
+                        let sharedState₁ := { sharedState with
                                                 executionEnv := executionEnv₁
                                             }
                         let s₁ : Yul.State := .Ok sharedState₁ default
