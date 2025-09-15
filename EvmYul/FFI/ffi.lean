@@ -14,9 +14,6 @@ def BLAKE2 (d : ByteArray) : Except String ByteArray := do
   if d[212]! ∉ [0, 1].map Nat.toUInt8 then throw "error"
   return BLAKE2Compress d
 
-@[extern "memset_zero"]
-opaque ByteArray.zeroes (n : USize) : ByteArray
-
 @[extern "keccak256"]
 opaque keccak256 (input : @& ByteArray) (len : USize) : ByteArray
 
