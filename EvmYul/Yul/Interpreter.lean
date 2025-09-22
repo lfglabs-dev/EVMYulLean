@@ -170,82 +170,72 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
           | _ => .error .InvalidArguments -- Incorrect number of arguments, this case should be impossible if the Yul code is parsed correctly. Guaranteed by the compiler.
       | .STATICCALL =>
         match args with
-          | _ :: address_arg :: value :: inOffset :: inSize :: outOffset :: outSize :: _ =>
+          | _ :: address_arg :: inOffset :: inSize :: outOffset :: outSize :: _ =>
                 let s₀Static : State := setStatic s₀ false
-                if ¬s₀Static.executionEnv.perm ∧ value ≠ ⟨0⟩
+                if ¬s₀Static.executionEnv.perm
                 then .error .StaticModeViolation
                 else 
                   let address := AccountAddress.ofUInt256 address_arg
                   let calldata₁ := s₀Static.toMachineState.memory.readWithPadding inOffset.toNat inSize.toNat
-                  let accountMap₁Opt := (s₀Static.sharedState.accountMap.transferBalance .Yul s₀Static.executionEnv.codeOwner address value)
-                  match accountMap₁Opt with
-                    | .none =>
-                      match s₀ with
+                
+                    if s₀Static.toSharedState.executionEnv.depth ≥ 1024
+                    then
+                      match s₀Static with
                         | .OutOfFuel => .error .OutOfFuel
                         | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
                         | .Ok sharedState₀ varstore =>
                           let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty }
-                          .ok (.Ok sharedState₁ varstore, [⟨0⟩]) -- Insufficient funds: return 0 to indicate error, with empty return data 
-                    | .some accountMap₁ =>
-                      if s₀Static.toSharedState.executionEnv.depth ≥ 1024
-                      then
-                        match s₀Static with
-                          | .OutOfFuel => .error .OutOfFuel
-                          | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                          | .Ok sharedState₀ varstore =>
-                            let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty }
-                            .ok (.Ok sharedState₁ varstore, [⟨0⟩])  -- Reached depth limit: return 0 to indicate error, with empty return data 
-                      else
-                        match s₀Static with
-                        | .OutOfFuel => .error .OutOfFuel
-                        | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                        | .Ok sharedState varstore =>
-                            match s₀Static.sharedState.accountMap.find? address with
-                              | .none => 
-                                match s₀Static with
+                          .ok (.Ok sharedState₁ varstore, [⟨0⟩])  -- Reached depth limit: return 0 to indicate error, with empty return data 
+                    else
+                      match s₀Static with
+                      | .OutOfFuel => .error .OutOfFuel
+                      | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
+                      | .Ok sharedState varstore =>
+                          match s₀Static.sharedState.accountMap.find? address with
+                            | .none => 
+                              match s₀Static with
+                                | .OutOfFuel => .error .OutOfFuel
+                                | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
+                                | .Ok sharedState₀ varstore =>
+                                  let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty }
+                                  .ok (.Ok sharedState₁ varstore, [⟨1⟩])  -- No contract at the provided address, return 1 to indicate success, with empty return data. (Like STOP opcode).
+                            | .some yulContract =>
+                              let executionEnv₁ := { sharedState.executionEnv with
+                                                        calldata := calldata₁,
+                                                        code := yulContract.code,
+                                                        codeOwner := address,
+                                                        source := s₀Static.executionEnv.codeOwner,
+                                                        weiValue := ⟨0⟩
+                                                        depth := s₀Static.toSharedState.executionEnv.depth + 1
+                                                    }
+                              let sharedState₁ := { sharedState with
+                                                      executionEnv := executionEnv₁,
+                                                      memory := default,
+                                                  }
+                              let s₁ : State := .Ok sharedState₁ default
+                              
+                              match callFromCode fuel₁ [] .none s₁ with
+                                | .error e => .error e
+                                | .ok (s₂, _) =>
+                              
+                                /- We note here that if:
+                                      `outOffset.toNat + (min outSize.toNat s₂.toMachineState.H_return.size) ≥ UInt256.size`
+                                    then we are writing beyond the theoretical memory size limit.
+                                    The yellow paper is unclear on the semantics of this (at the time of writing).
+                                    We follow the https://github.com/NethermindEth/nethermind execution client (for example).
+                                    And we expand the memory beyond the theoretical 2^256 bit max size if needed.
+                                    In practice, this is essentially impossible to occur due to the
+                                      prohibitively large gas cost of allocating this much memory. -/
+                                let memory₃ := s₂.toMachineState.H_return.copySlice 0 s₀Static.toMachineState.memory outOffset.toNat (min outSize.toNat s₂.toMachineState.H_return.size)
+                                match s₂ with
                                   | .OutOfFuel => .error .OutOfFuel
                                   | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                                  | .Ok sharedState₀ varstore =>
-                                    let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty }
-                                    .ok (.Ok sharedState₁ varstore, [⟨1⟩])  -- No contract at the provided address, return 1 to indicate success, with empty return data. (Like STOP opcode).
-                              | .some yulContract =>
-                                let executionEnv₁ := { sharedState.executionEnv with
-                                                          calldata := calldata₁,
-                                                          code := yulContract.code,
-                                                          codeOwner := address,
-                                                          source := s₀Static.executionEnv.codeOwner,
-                                                          weiValue := value
-                                                          depth := s₀Static.toSharedState.executionEnv.depth + 1
-                                                      }
-                                let sharedState₁ := { sharedState with
-                                                        executionEnv := executionEnv₁,
-                                                        memory := default,
-                                                        accountMap := accountMap₁
-                                                    }
-                                let s₁ : State := .Ok sharedState₁ default
-                                
-                                match callFromCode fuel₁ [] .none s₁ with
-                                  | .error e => .error e
-                                  | .ok (s₂, _) =>
-                                
-                                  /- We note here that if:
-                                        `outOffset.toNat + (min outSize.toNat s₂.toMachineState.H_return.size) ≥ UInt256.size`
-                                      then we are writing beyond the theoretical memory size limit.
-                                      The yellow paper is unclear on the semantics of this (at the time of writing).
-                                      We follow the https://github.com/NethermindEth/nethermind execution client (for example).
-                                      And we expand the memory beyond the theoretical 2^256 bit max size if needed.
-                                      In practice, this is essentially impossible to occur due to the
-                                        prohibitively large gas cost of allocating this much memory. -/
-                                  let memory₃ := s₂.toMachineState.H_return.copySlice 0 s₀Static.toMachineState.memory outOffset.toNat (min outSize.toNat s₂.toMachineState.H_return.size)
-                                  match s₂ with
-                                    | .OutOfFuel => .error .OutOfFuel
-                                    | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                                    | .Ok sharedState₂ _ =>
-                                      let sharedState₃ := { sharedState₂ with
-                                                              memory := memory₃,
-                                                              returnData := s₂.toMachineState.H_return
-                                                          }
-                                      .ok (setStatic (.Ok sharedState₃ varstore) s₀.toSharedState.executionEnv.perm, [⟨1⟩])
+                                  | .Ok sharedState₂ _ =>
+                                    let sharedState₃ := { sharedState₂ with
+                                                            memory := memory₃,
+                                                            returnData := s₂.toMachineState.H_return,
+                                                        }
+                                    .ok (setStatic (.Ok sharedState₃ varstore) s₀.toSharedState.executionEnv.perm, [⟨1⟩])
           | _ => .error .InvalidArguments -- Incorrect number of arguments, this case should be impossible if the Yul code is parsed correctly. Guaranteed by the compiler.
       | .CALLCODE =>
         match args with
