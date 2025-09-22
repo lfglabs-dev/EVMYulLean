@@ -223,6 +223,26 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                               let s₁ : State := .Ok sharedState₁ default
                               
                               match callFromCode fuel₁ [] .none s₁ with
+                                | .error (.YulHalt s₂ _) =>
+                                    /- We note here that if:
+                                      `outOffset.toNat + (min outSize.toNat s₂.toMachineState.H_return.size) ≥ UInt256.size`
+                                    then we are writing beyond the theoretical memory size limit.
+                                    The yellow paper is unclear on the semantics of this (at the time of writing).
+                                    We follow the https://github.com/NethermindEth/nethermind execution client (for example).
+                                    And we expand the memory beyond the theoretical 2^256 bit max size if needed.
+                                    In practice, this is essentially impossible to occur due to the
+                                      prohibitively large gas cost of allocating this much memory. -/
+                                let memory₃ := s₂.toMachineState.H_return.copySlice 0 s₀Static.toMachineState.memory outOffset.toNat (min outSize.toNat s₂.toMachineState.H_return.size)
+                                match s₂ with
+                                  | .OutOfFuel => .error .OutOfFuel
+                                  | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
+                                  | .Ok sharedState₂ _ =>
+                                    let sharedState₃ := { sharedState₂ with
+                                                            memory := memory₃,
+                                                            returnData := s₂.toMachineState.H_return,
+                                                            H_return := ByteArray.empty
+                                                        }
+                                    .ok (setStatic (.Ok sharedState₃ varstore) s₀.toSharedState.executionEnv.perm, [⟨1⟩])
                                 | .error e => .error e
                                 | .ok (s₂, _) =>
                               
@@ -306,6 +326,27 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                             let s₁ : State := .Ok sharedState₁ default
                             
                             match callFromCode fuel₁ [] .none s₁ with
+                            | .error (.YulHalt s₂ _) =>
+                              /- We note here that if:
+                                    `outOffset.toNat + (min outSize.toNat s₂.toMachineState.H_return.size) ≥ UInt256.size`
+                                  then we are writing beyond the theoretical memory size limit.
+                                  The yellow paper is unclear on the semantics of this (at the time of writing).
+                                  We follow the https://github.com/NethermindEth/nethermind execution client (for example).
+                                  And we expand the memory beyond the theoretical 2^256 bit max size if needed.
+                                  In practice, this is essentially impossible to occur due to the
+                                    prohibitively large gas cost of allocating this much memory. -/
+                              let memory₃ := s₂.toMachineState.H_return.copySlice 0 s₀.toMachineState.memory outOffset.toNat (min outSize.toNat s₂.toMachineState.H_return.size)
+                              match s₂ with
+                                | .OutOfFuel => .error .OutOfFuel
+                                | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
+                                | .Ok sharedState₂ _ =>
+                                  let sharedState₃ := { sharedState₂ with
+                                                          memory := memory₃,
+                                                          returnData := s₂.toMachineState.H_return,
+                                                          H_return := ByteArray.empty
+                                                      }
+                                  .ok (.Ok sharedState₃ varstore, [⟨1⟩])
+
                             | .error e => .error e
                             | .ok (s₂, _) =>                            
                               /- We note here that if:
@@ -369,6 +410,26 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                         let s₁ : State := .Ok sharedState₁ default
                         
                         match callFromCode fuel₁ [] .none s₁ with
+                          | .error (.YulHalt s₂ _) =>
+                              /- We note here that if:
+                                `outOffset.toNat + (min outSize.toNat s₂.toMachineState.H_return.size) ≥ UInt256.size`
+                              then we are writing beyond the theoretical memory size limit.
+                              The yellow paper is unclear on the semantics of this (at the time of writing).
+                              We follow the https://github.com/NethermindEth/nethermind execution client (for example).
+                              And we expand the memory beyond the theoretical 2^256 bit max size if needed.
+                              In practice, this is essentially impossible to occur due to the
+                                prohibitively large gas cost of allocating this much memory. -/
+                          let memory₃ := s₂.toMachineState.H_return.copySlice 0 s₀.toMachineState.memory outOffset.toNat (min outSize.toNat s₂.toMachineState.H_return.size)
+                          match s₂ with
+                            | .OutOfFuel => .error .OutOfFuel
+                            | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
+                            | .Ok sharedState₂ _ =>
+                              let sharedState₃ := { sharedState₂ with
+                                                      memory := memory₃,
+                                                      returnData := s₂.toMachineState.H_return,
+                                                      H_return := ByteArray.empty
+                                                  }
+                              .ok (.Ok sharedState₃ varstore, [⟨1⟩])
                           | .error e => .error e
                           | .ok (s₂, _) =>                        
                           /- We note here that if:
