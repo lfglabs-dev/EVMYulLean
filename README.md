@@ -86,7 +86,7 @@ We recommend redirecting `stderr` into a file to not pollute the output.
 - In the `EvmYul/Yul/YulSemanticsTests.lean` we manually changed `let _1 := extcodesize( 2)` to `let _1 := 1` in `fun_testStoreAndRetrieveExternal`.
 
 ## Other contract code related opcodes not modelled
-- We also do not model EXTCODEHASH, EXTCODECOPY, CODECOPY, CODESIZE for similar reasons to not modelling `EXTCODESIZE`.
+- We also do not model `EXTCODEHASH`, `EXTCODECOPY`, `CODECOPY`, `CODESIZE` for similar reasons to not modelling `EXTCODESIZE`.
 - These cases are caught by the the `_` in the match statement in `EVMYul/Semantics.lean` and return `default`.
 
 ## SELFDESTRUCT
