@@ -84,3 +84,7 @@ We recommend redirecting `stderr` into a file to not pollute the output.
 
 - Not modelled, the current semantics raise an error. Solidity checks `extcodesize` and so generated Yul will not be able to call other contracts without removing or editing these `extcodesize` checks (manually).
 - In the `EvmYul/Yul/YulSemanticsTests.lean` we manually changed `let _1 := extcodesize( 2)` to `let _1 := 1` in `fun_testStoreAndRetrieveExternal`.
+
+## SELFDESTRUCT
+
+Halting for `SELFDESTRUCT` is not implemented and the semantics for `SELFDESTRUCT` have limitations, such as not triggering the fallback function in a contract that is the recipient of the ether from the contract the self-destructs. We may remove the semantics for `SELFDESTRUCT` once its status changes from deprecated to not being supported.
