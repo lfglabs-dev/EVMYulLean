@@ -974,4 +974,4 @@ open EvmYul.Yul
 def main : IO Unit := do
   IO.println (s!"test₁: {test₁} -- " ++ (if s!"{test₁}" = "[1 [(0, 42)], 2 [(0, 42)], 3 []]" then "Success" else "Failure"))
   IO.println (s!"test₂: {test₂} -- " ++ (if s!"{test₂}" = "[1 [], 2 [(0, 21)], 3 [(0, 21)]]" then "Success" else "Failure"))
-  -- IO.println s!"Test 3: {stateEg₁.toSharedState.accountMap.toList.map (fun a => repr a.1 ++ " " ++ repr a.2.storage.toList)}"
+  IO.println (s!"test₃: {test₃} -- " ++ (if s!"{test₃}" = "StaticModeViolation" then "Success" else "Failure"))
