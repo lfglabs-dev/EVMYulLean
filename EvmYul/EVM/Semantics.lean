@@ -232,7 +232,6 @@ def step (fuel : ℕ) (gasCost : ℕ) (instr : Option (Operation .EVM × Option 
         | .none => fetchInstr evmState.toState.executionEnv evmState.pc
         | .some (instr, arg) => pure (instr, arg)
     let evmState := { evmState with execLength := evmState.execLength + 1 }
-    -- EVLYul.step instr {evmState with { gasAvailable := if tracking_gas then evmState.gasAvailable - UInt256.ofNat gasCost else evmState.gasAvailable}}
     match instr with
       | .CREATE =>
         let evmState := {evmState with gasAvailable := evmState.gasAvailable - UInt256.ofNat gasCost}
