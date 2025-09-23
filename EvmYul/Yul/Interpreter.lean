@@ -272,7 +272,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                           let executionEnv₁ := { sharedState.executionEnv with
                                                     calldata := calldata₁,
                                                     code := yulContract.code,
-                                                    codeOwner := address,
+                                                    codeOwner := s₀.executionEnv.codeOwner,
                                                     source := s₀.executionEnv.codeOwner,
                                                     weiValue := value
                                                     depth := s₀.executionEnv.depth + 1
@@ -284,7 +284,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                                               }
                           let s₁ : State := .Ok sharedState₁ default
                           
-                          match callDispatcher fuel₁ .none s₁ with
+                          match callDispatcher fuel₁ yulContract.code s₁ with
                           | .error (.YulHalt s₂ _) =>
                             let memory₃ := s₂.toMachineState.H_return.copySlice 0 s₀.toMachineState.memory outOffset.toNat (min outSize.toNat s₂.toMachineState.H_return.size)
                             match s₂ with
