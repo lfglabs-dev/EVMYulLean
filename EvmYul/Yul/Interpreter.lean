@@ -50,6 +50,16 @@ def setStatic (s : State) (p : Bool) : State :=
                         }
     .Ok sharedState' varstore
 
+def buildContractCallEmptyReturnState (s₀ : State) (accountMap₁ : Option (AccountMap .Yul)) (v : Literal) : Except Yul.Exception (State × List Literal) :=
+    match s₀ with
+    | .OutOfFuel => .error .OutOfFuel
+    | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
+    | .Ok sharedState₀ varstore =>
+      let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty,
+                                             returnData := ByteArray.empty,
+                                             accountMap := accountMap₁.getD s₀.toSharedState.accountMap }
+      .ok (.Ok sharedState₁ varstore, [v])
+
 mutual
 
 def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Literal) : Except Yul.Exception (State × List Literal) :=
@@ -67,23 +77,11 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
             let accountMap₁Opt := (s₀.sharedState.accountMap.transferBalance .Yul s₀.executionEnv.codeOwner address value)
             match accountMap₁Opt with
               | .none =>
-                match s₀ with
-                  | .OutOfFuel => .error .OutOfFuel
-                  | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                  | .Ok sharedState₀ varstore =>
-                    let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty,
-                                                            returnData := ByteArray.empty }
-                    .ok (.Ok sharedState₁ varstore, [⟨0⟩]) -- Insufficient funds: return 0 to indicate error, with empty return data 
+                buildContractCallEmptyReturnState s₀ .none ⟨0⟩ -- Insufficient funds: return 0 to indicate error, with empty return data 
               | .some accountMap₁ =>
                 if s₀.toSharedState.executionEnv.depth ≥ 1024
                 then
-                  match s₀ with
-                    | .OutOfFuel => .error .OutOfFuel
-                    | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                    | .Ok sharedState₀ varstore =>
-                      let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty,
-                                                              returnData := ByteArray.empty }
-                      .ok (.Ok sharedState₁ varstore, [⟨0⟩])  -- Reached depth limit: return 0 to indicate error, with empty return data 
+                  buildContractCallEmptyReturnState s₀ .none ⟨0⟩ -- Reached depth limit: return 0 to indicate error, with empty return data 
                 else
                   match s₀ with
                   | .OutOfFuel => .error .OutOfFuel
@@ -91,14 +89,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                   | .Ok sharedState varstore =>
                       match s₀.sharedState.accountMap.find? address with
                         | .none => 
-                          match s₀ with
-                            | .OutOfFuel => .error .OutOfFuel
-                            | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                            | .Ok sharedState₀ varstore =>
-                              let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty,
-                                                                      returnData := ByteArray.empty,
-                                                                      accountMap := accountMap₁ }
-                              .ok (.Ok sharedState₁ varstore, [⟨1⟩])  -- No contract at the provided address, return 1 to indicate success, with empty return data. (Like STOP opcode).
+                          buildContractCallEmptyReturnState s₀ accountMap₁ ⟨1⟩ -- No contract at the provided address, return 1 to indicate success, with empty return data. (Like STOP opcode).
                         | .some yulContract =>
                           let executionEnv₁ := { sharedState.executionEnv with
                                                     calldata := calldata₁,
@@ -181,13 +172,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
           
               if s₀Static.toSharedState.executionEnv.depth ≥ 1024
               then
-                match s₀Static with
-                  | .OutOfFuel => .error .OutOfFuel
-                  | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                  | .Ok sharedState₀ varstore =>
-                    let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty,
-                                                            returnData := ByteArray.empty }
-                    .ok (.Ok sharedState₁ varstore, [⟨0⟩])  -- Reached depth limit: return 0 to indicate error, with empty return data 
+                buildContractCallEmptyReturnState s₀Static .none ⟨0⟩ -- Reached depth limit: return 0 to indicate error, with empty return data 
               else
                 match s₀Static with
                 | .OutOfFuel => .error .OutOfFuel
@@ -195,13 +180,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                 | .Ok sharedState varstore =>
                     match s₀Static.sharedState.accountMap.find? address with
                       | .none => 
-                        match s₀Static with
-                          | .OutOfFuel => .error .OutOfFuel
-                          | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                          | .Ok sharedState₀ varstore =>
-                            let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty,
-                                                                    returnData := ByteArray.empty }
-                            .ok (.Ok sharedState₁ varstore, [⟨1⟩])  -- No contract at the provided address, return 1 to indicate success, with empty return data. (Like STOP opcode).
+                          buildContractCallEmptyReturnState s₀Static .none ⟨1⟩ -- No contract at the provided address, return 1 to indicate success, with empty return data. (Like STOP opcode).
                       | .some yulContract =>
                         let executionEnv₁ := { sharedState.executionEnv with
                                                   calldata := calldata₁,
@@ -270,24 +249,11 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
             let accountMap₁Opt := (s₀.sharedState.accountMap.transferBalance .Yul s₀.executionEnv.codeOwner s₀.executionEnv.codeOwner value)
             match accountMap₁Opt with
               | .none =>
-                  match s₀ with
-                    | .OutOfFuel => .error .OutOfFuel
-                    | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                    | .Ok sharedState₀ varstore =>
-                      let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty,
-                                                              returnData := ByteArray.empty }
-                      .ok (.Ok sharedState₁ varstore, [⟨0⟩]) -- Insufficient funds: return 0 to indicate error, with empty return data 
+                  buildContractCallEmptyReturnState s₀ .none ⟨0⟩ -- Insufficient funds: return 0 to indicate error, with empty return data 
               | .some accountMap₁ =>
                 if s₀.toSharedState.executionEnv.depth ≥ 1024
                 then
-                  match s₀ with
-                    | .OutOfFuel => .error .OutOfFuel
-                    | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                    | .Ok sharedState₀ varstore =>
-                      let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty,
-                                                              returnData := ByteArray.empty,
-                                                              accountMap := accountMap₁ }
-                      .ok (.Ok sharedState₁ varstore, [⟨0⟩]) -- Reached depth limit: return 0 to indicate error, with empty return data 
+                  buildContractCallEmptyReturnState s₀ accountMap₁ ⟨0⟩ -- Reached depth limit: return 0 to indicate error, with empty return data 
                 else
                   match s₀ with
                   | .OutOfFuel => .error .OutOfFuel
@@ -295,14 +261,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                   | .Ok sharedState varstore =>
                       match s₀.sharedState.accountMap.find? address with
                         | .none => 
-                          match s₀ with
-                            | .OutOfFuel => .error .OutOfFuel
-                            | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                            | .Ok sharedState₀ varstore =>
-                              let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty,
-                                                                      returnData := ByteArray.empty,
-                                                                      accountMap := accountMap₁ }
-                              .ok (.Ok sharedState₁ varstore, [⟨1⟩])  -- No contract at the provided address, return 1 to indicate success, with empty return data. (Like STOP opcode).
+                            buildContractCallEmptyReturnState s₀ accountMap₁ ⟨1⟩ -- No contract at the provided address, return 1 to indicate success, with empty return data. (Like STOP opcode).
                         | .some yulContract =>
                           let executionEnv₁ := { sharedState.executionEnv with
                                                     calldata := calldata₁,
@@ -369,13 +328,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
             let calldata₁ := s₀.toMachineState.memory.readWithPadding inOffset.toNat inSize.toNat
             if s₀.toSharedState.executionEnv.depth ≥ 1024
             then
-              match s₀ with
-                | .OutOfFuel => .error .OutOfFuel
-                | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                | .Ok sharedState₀ varstore =>
-                  let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty,
-                                                                      returnData := ByteArray.empty }
-                  .ok (.Ok sharedState₁ varstore, [⟨0⟩])  -- Reached depth limit: return 0 to indicate error, with empty return data 
+              buildContractCallEmptyReturnState s₀ .none ⟨0⟩ -- Reached depth limit: return 0 to indicate error, with empty return data 
             else
               match s₀ with
               | .OutOfFuel => .error .OutOfFuel
@@ -383,13 +336,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
               | .Ok sharedState varstore =>
                   match s₀.sharedState.accountMap.find? address with
                     | .none => 
-                      match s₀ with
-                        | .OutOfFuel => .error .OutOfFuel
-                        | .Checkpoint j => .ok (.Checkpoint j, [⟨0⟩])
-                        | .Ok sharedState₀ varstore =>
-                          let sharedState₁ := {sharedState₀ with H_return := ByteArray.empty,
-                                                                  returnData := ByteArray.empty }
-                          .ok (.Ok sharedState₁ varstore, [⟨1⟩])  -- No contract at the provided address, return 1 to indicate success, with empty return data. (Like STOP opcode).
+                      buildContractCallEmptyReturnState s₀ .none ⟨1⟩ -- No contract at the provided address, return 1 to indicate success, with empty return data. (Like STOP opcode).
                     | .some yulContract =>
                       let executionEnv₁ := { sharedState.executionEnv with
                                                 calldata := calldata₁,
