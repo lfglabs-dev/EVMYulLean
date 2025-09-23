@@ -21,7 +21,7 @@ def stateEg₁ : Yul.State :=
   let storageCode : YulContract := 
   
   
- {
+{
 dispatcher := 
       <s {
                 mstore(64, 0x80)
@@ -30,6 +30,9 @@ dispatcher :=
                     switch shr(224, calldataload(0))
                     case 0x2e64cec1 { external_fun_retrieve() }
                     case 0x6057361d { external_fun_store() }
+                    case 0xd54d0506 {
+                        external_fun_storageCallCodeTest()
+                    }
                     case 0xdd15ce8e {
                         external_fun_storageDelegateCallTest()
                     }
@@ -148,6 +151,22 @@ functions := (∅ : Finmap (fun (_ : YulFunctionName) ↦ Yul.Ast.FunctionDefini
                 }
                 let _1 := abi_decode_tuple_uint256(4, calldatasize())
                 fun_store(_1)
+                return(0, 0)
+            }
+            
+           >
+
+          |>.insert
+          "external_fun_storageCallCodeTest"
+          <f
+          function external_fun_storageCallCodeTest()
+            {
+                if callvalue()
+                {
+                    revert_error_ca66f745a3ce8ff40e2ccaf1ad45db7774001b90d25810abd9040049be7bf4bb()
+                }
+                abi_decode(4, calldatasize())
+                fun_storageCallCodeTest()
                 return(0, 0)
             }
             
@@ -298,9 +317,9 @@ functions := (∅ : Finmap (fun (_ : YulFunctionName) ↦ Yul.Ast.FunctionDefini
            >
 
           |>.insert
-          "fun_storageDelegateCallTest"
+          "fun_storageCallCodeTest"
           <f
-          function fun_storageDelegateCallTest()
+          function fun_storageCallCodeTest()
             {
                 let expr_mpos :=  mload(64)
                 let _1 := add(expr_mpos, 0x20)
@@ -310,15 +329,33 @@ functions := (∅ : Finmap (fun (_ : YulFunctionName) ↦ Yul.Ast.FunctionDefini
                 finalize_allocation(expr_mpos, sub(_1, expr_mpos))
                 let _2 := mload(expr_mpos)
                 let _3 := gas()
-                pop(delegatecall(_3,  4,  add(expr_mpos,  0x20),  _2, 0, 0))
+                pop(callcode(_3,  4, 0, add(expr_mpos,  0x20),  _2, 0, 0))
+                pop(extract_returndata())
+            }
+            
+           >
+
+          |>.insert
+          "fun_storageDelegateCallTest"
+          <f
+          function fun_storageDelegateCallTest()
+            {
+                let expr_55_mpos :=  mload(64)
+                let _1 := add(expr_55_mpos, 0x20)
+                mstore(_1,  shl(224, 0x2a24ab1f))
+                _1 := add(expr_55_mpos, 36)
+                mstore(expr_55_mpos, add(sub(_1, expr_55_mpos),  not(31)))
+                finalize_allocation(expr_55_mpos, sub(_1, expr_55_mpos))
+                let _2 := mload(expr_55_mpos)
+                let _3 := gas()
+                pop(delegatecall(_3,  4,  add(expr_55_mpos,  0x20),  _2, 0, 0))
                 pop(extract_returndata())
             }
         
            >
 
 
-}
-  
+}  
   
   let storageAccount : Account .Yul :=
     { code := storageCode
@@ -1201,6 +1238,12 @@ def test₄ :=
   | .error e => repr e
   | .ok s => s!"{s.toSharedState.accountMap.toList.map (fun (a : AccountAddress × Account .Yul) => repr a.1 ++ " " ++ repr a.2.storage.toList)}"
 
+def test₅ :=
+  let expr : Expr := .Call (Sum.inr "fun_storageCallCodeTest") []
+  match (exec 99 (.ExprStmtCall expr) .none stateEg₄) with
+  | .error e => repr e
+  | .ok s => s!"{s.toSharedState.accountMap.toList.map (fun (a : AccountAddress × Account .Yul) => repr a.1 ++ " " ++ repr a.2.storage.toList)}"
+
 
 end Yul
 
@@ -1215,3 +1258,4 @@ def main : IO Unit := do
   IO.println (s!"test₂: {test₂} -- " ++ (if s!"{test₂}" = "[1 [], 2 [(0, 21)], 3 [(0, 21)], 4 []]" then "Success" else "Failure"))
   IO.println (s!"test₃: {test₃} -- " ++ (if s!"{test₃}" = "StaticModeViolation" then "Success" else "Failure"))
   IO.println (s!"test₄: {test₄} -- " ++ (if s!"{test₄}" = "[1 [], 2 [(0, 5)], 3 [], 4 []]" then "Success" else "Failure"))
+  IO.println (s!"test₅: {test₅} -- " ++ (if s!"{test₅}" = "[1 [], 2 [(0, 5)], 3 [], 4 []]" then "Success" else "Failure"))
