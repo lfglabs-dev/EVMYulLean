@@ -946,6 +946,17 @@ def test₁ :=
   | .error e => repr e
   | .ok s => s!"{s.toSharedState.accountMap.toList.map (fun (a : AccountAddress × Account .Yul) => repr a.1 ++ " " ++ repr a.2.storage.toList)}"
 
+def stateEg₂ : Yul.State :=
+  Yul.State.Ok {stateEg₁.toSharedState with executionEnv := {stateEg₁.toSharedState.executionEnv with codeOwner := caller2Address, perm := true}} Inhabited.default
+  
+def test₂ :=
+  dbg_trace s!"stateEg₂: {stateEg₂.toSharedState.executionEnv.codeOwner}"
+  let expr : Expr := .Call (Sum.inr "fun_testStaticRetrieve") [.Lit ⟨42⟩]
+  match (exec 99 (.ExprStmtCall expr) stateEg₂) with
+  | .error e => repr e
+  | .ok s => s!"{s.toSharedState.accountMap.toList.map (fun (a : AccountAddress × Account .Yul) => repr a.1 ++ " " ++ repr a.2.storage.toList)}"
+
+
 end Yul
 
 end EvmYul
@@ -956,4 +967,5 @@ open EvmYul.Yul
 -- `#eval` cannot run the test because it uses the foreign function interface for `ByteArray.zeroes`.
 def main : IO Unit := do
   IO.println s!"test₁: {test₁}"
+  IO.println s!"test₂: {test₂}"
   -- IO.println s!"Test 3: {stateEg₁.toSharedState.accountMap.toList.map (fun a => repr a.1 ++ " " ++ repr a.2.storage.toList)}"
