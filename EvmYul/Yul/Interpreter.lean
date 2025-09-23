@@ -51,9 +51,7 @@ def setStatic (s : State) (p : Bool) : State :=
     .Ok sharedState' varstore
 
 mutual
-/--
-TODO: Temporary EvmYul artefact with separate primop implementations.
--/
+
 def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Literal) : Except Yul.Exception (State × List Literal) :=
     match fuel with
     | 0 => .error .OutOfFuel
