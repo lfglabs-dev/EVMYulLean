@@ -24,10 +24,10 @@ contract CallerContract {
         number = abi.decode(data, (uint256));
     }
 
-    function testStaticStore() public returns (uint256) { // Should raise a .StaticModeViolation
+    function testStaticStore(uint256 value) public returns (uint256) { // Should raise a .StaticModeViolation
         address storageContractAddr = address(0x02); // Ensure StorageContract is set up at address 2
         (bool success, bytes memory data) = storageContractAddr.staticcall(
-            abi.encodeWithSignature("store(uint256)")
+            abi.encodeWithSignature("store(uint256)", value)
         );
         number = abi.decode(data, (uint256));
     }

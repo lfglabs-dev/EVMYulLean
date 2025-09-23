@@ -490,7 +490,7 @@ dispatcher :=
                 if iszero(lt(calldatasize(), 4))
                 {
                     switch shr(224, calldataload(0))
-                    case 0x1690409e {
+                    case 0x37cbaee8 {
                         external_fun_testStaticStore()
                     }
                     case 0x5ec1cee6 {
@@ -517,56 +517,6 @@ functions := (∅ : Finmap (fun (_ : YulFunctionName) ↦ Yul.Ast.FunctionDefini
           <f
           function revert_error_dbdddcbe895c83990c08b3492a0e83918d802a52331272ac6fdb6a7c4aea3b1b()
             { revert(0, 0) }
-            
-           >
-
-          |>.insert
-          "abi_decode"
-          <f
-          function abi_decode(headStart, dataEnd)
-            {
-                if slt(sub(dataEnd, headStart), 0)
-                {
-                    revert_error_dbdddcbe895c83990c08b3492a0e83918d802a52331272ac6fdb6a7c4aea3b1b()
-                }
-            }
-            
-           >
-
-          |>.insert
-          "abi_encode_uint256_to_uint256"
-          <f
-          function abi_encode_uint256_to_uint256(value, pos)
-            { mstore(pos, value) }
-            
-           >
-
-          |>.insert
-          "abi_encode_uint256"
-          <f
-          function abi_encode_uint256(headStart, value0) -> tail
-            {
-                tail := add(headStart, 32)
-                abi_encode_uint256_to_uint256(value0, headStart)
-            }
-            
-           >
-
-          |>.insert
-          "external_fun_testStaticStore"
-          <f
-          function external_fun_testStaticStore()
-            {
-                if callvalue()
-                {
-                    revert_error_ca66f745a3ce8ff40e2ccaf1ad45db7774001b90d25810abd9040049be7bf4bb()
-                }
-                abi_decode(4, calldatasize())
-                let ret := fun_testStaticStore()
-                let memPos := mload(64)
-                let _1 := abi_encode_uint256(memPos, ret)
-                return(memPos, sub(_1, memPos))
-            }
             
            >
 
@@ -604,6 +554,43 @@ functions := (∅ : Finmap (fun (_ : YulFunctionName) ↦ Yul.Ast.FunctionDefini
            >
 
           |>.insert
+          "abi_encode_uint256_to_uint256"
+          <f
+          function abi_encode_uint256_to_uint256(value, pos)
+            { mstore(pos, value) }
+            
+           >
+
+          |>.insert
+          "abi_encode_uint256"
+          <f
+          function abi_encode_uint256(headStart, value0) -> tail
+            {
+                tail := add(headStart, 32)
+                abi_encode_uint256_to_uint256(value0, headStart)
+            }
+            
+           >
+
+          |>.insert
+          "external_fun_testStaticStore"
+          <f
+          function external_fun_testStaticStore()
+            {
+                if callvalue()
+                {
+                    revert_error_ca66f745a3ce8ff40e2ccaf1ad45db7774001b90d25810abd9040049be7bf4bb()
+                }
+                let _1 := abi_decode_tuple_uint256(4, calldatasize())
+                let ret := fun_testStaticStore(_1)
+                let memPos := mload(64)
+                let _2 := abi_encode_uint256(memPos, ret)
+                return(memPos, sub(_2, memPos))
+            }
+            
+           >
+
+          |>.insert
           "external_fun_testStoreAndRetrieveExternal"
           <f
           function external_fun_testStoreAndRetrieveExternal()
@@ -615,6 +602,19 @@ functions := (∅ : Finmap (fun (_ : YulFunctionName) ↦ Yul.Ast.FunctionDefini
                 let _1 := abi_decode_tuple_uint256(4, calldatasize())
                 fun_testStoreAndRetrieveExternal(_1)
                 return(0, 0)
+            }
+            
+           >
+
+          |>.insert
+          "abi_decode"
+          <f
+          function abi_decode(headStart, dataEnd)
+            {
+                if slt(sub(dataEnd, headStart), 0)
+                {
+                    revert_error_dbdddcbe895c83990c08b3492a0e83918d802a52331272ac6fdb6a7c4aea3b1b()
+                }
             }
             
            >
@@ -773,22 +773,23 @@ functions := (∅ : Finmap (fun (_ : YulFunctionName) ↦ Yul.Ast.FunctionDefini
           |>.insert
           "fun_testStaticStore"
           <f
-          function fun_testStaticStore() -> var
+          function fun_testStaticStore(var_value) -> var
             {
                 var :=  0
-                let expr_mpos :=  mload(64)
+                let expr_105_mpos :=  mload(64)
                 let _1 := 0x20
-                let _2 := add(expr_mpos, _1)
+                let _2 := add(expr_105_mpos, _1)
                 mstore(_2, shl(224, 0x6057361d))
-                _2 := add(expr_mpos, 36)
-                mstore(expr_mpos, add(sub(_2, expr_mpos),  not(31)))
-                finalize_allocation(expr_mpos, sub(_2, expr_mpos))
-                let _3 := mload(expr_mpos)
-                let _4 := gas()
-                pop(staticcall(_4,  2,  add(expr_mpos, _1), _3, 0, 0))
-                let expr_103_component_2_mpos := extract_returndata()
-                let _5 := mload( expr_103_component_2_mpos)
-                let expr := abi_decode_uint256_fromMemory(add(expr_103_component_2_mpos, _1), add(add(expr_103_component_2_mpos,  _5),  _1))
+                _2 := add(expr_105_mpos, 36)
+                let _3 := abi_encode_uint256(_2, var_value)
+                mstore(expr_105_mpos, add(sub(_3, expr_105_mpos),  not(31)))
+                finalize_allocation(expr_105_mpos, sub(_3, expr_105_mpos))
+                let _4 := mload(expr_105_mpos)
+                let _5 := gas()
+                pop(staticcall(_5,  2,  add(expr_105_mpos, _1), _4, 0, 0))
+                let expr_106_component_2_mpos := extract_returndata()
+                let _6 := mload( expr_106_component_2_mpos)
+                let expr := abi_decode_uint256_fromMemory(add(expr_106_component_2_mpos, _1), add(add(expr_106_component_2_mpos,  _6),  _1))
                 update_storage_value_offset_uint256_to_uint256( 0,  expr)
             }
             
@@ -878,16 +879,16 @@ functions := (∅ : Finmap (fun (_ : YulFunctionName) ↦ Yul.Ast.FunctionDefini
           function fun_testStaticRetrieve() -> var_
             {
                 var_ :=  0
-                let expr_67_mpos :=  mload(64)
+                let expr_mpos :=  mload(64)
                 let _1 := 0x20
-                let _2 := add(expr_67_mpos, _1)
+                let _2 := add(expr_mpos, _1)
                 mstore(_2,  shl(224, 0x2e64cec1))
-                _2 := add(expr_67_mpos, 36)
-                mstore(expr_67_mpos, add(sub(_2, expr_67_mpos),  not(31)))
-                finalize_allocation(expr_67_mpos, sub(_2, expr_67_mpos))
-                let _3 := mload(expr_67_mpos)
+                _2 := add(expr_mpos, 36)
+                mstore(expr_mpos, add(sub(_2, expr_mpos),  not(31)))
+                finalize_allocation(expr_mpos, sub(_2, expr_mpos))
+                let _3 := mload(expr_mpos)
                 let _4 := gas()
-                pop(staticcall(_4,  2,  add(expr_67_mpos, _1), _3, 0, 0))
+                pop(staticcall(_4,  2,  add(expr_mpos, _1), _3, 0, 0))
                 let expr_component_mpos := extract_returndata()
                 let _5 := mload( expr_component_mpos)
                 let expr := abi_decode_uint256_fromMemory(add(expr_component_mpos, _1), add(add(expr_component_mpos,  _5),  _1))
@@ -950,7 +951,13 @@ def stateEg₂ : Yul.State :=
   Yul.State.Ok {stateEg₁.toSharedState with executionEnv := {stateEg₁.toSharedState.executionEnv with codeOwner := caller2Address, perm := true}} Inhabited.default
   
 def test₂ :=
-  let expr : Expr := .Call (Sum.inr "fun_testStaticRetrieve") [.Lit ⟨42⟩]
+  let expr : Expr := .Call (Sum.inr "fun_testStaticRetrieve") []
+  match (exec 99 (.ExprStmtCall expr) stateEg₂) with
+  | .error e => repr e
+  | .ok s => s!"{s.toSharedState.accountMap.toList.map (fun (a : AccountAddress × Account .Yul) => repr a.1 ++ " " ++ repr a.2.storage.toList)}"
+
+def test₃ :=
+  let expr : Expr := .Call (Sum.inr "fun_testStaticStore") [.Lit ⟨42⟩]
   match (exec 99 (.ExprStmtCall expr) stateEg₂) with
   | .error e => repr e
   | .ok s => s!"{s.toSharedState.accountMap.toList.map (fun (a : AccountAddress × Account .Yul) => repr a.1 ++ " " ++ repr a.2.storage.toList)}"
