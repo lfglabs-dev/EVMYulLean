@@ -64,6 +64,14 @@ lake test -- <NUM_THREADS> 2> out_discard.txt
 where `<NUM_THREADS>` is the number of threads running conformance tests in parallel. Note that the default is `1`.
 We recommend redirecting `stderr` into a file to not pollute the output.
 
+# Yul semantics tests
+
+To execute the Yul semantics tests run:
+
+`lake exe yulSemanticsTests`
+
+These tests are definied in `EvmYul/Yul/YulSemanticsTests/Main.lean`.
+
 # Limitations of the Yul semantics
 
 ## Fallback function from receiving ether
