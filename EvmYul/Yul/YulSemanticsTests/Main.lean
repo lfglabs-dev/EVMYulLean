@@ -207,7 +207,7 @@ functions := (∅ : Finmap (fun (_ : YulFunctionName) ↦ Yul.Ast.FunctionDefini
     { code := storageCode
     , balance := ⟨1000⟩
     , nonce := ⟨0⟩ 
-    , storage := ∅
+    , storage := Batteries.RBMap.ofList [(⟨0⟩, ⟨21⟩)] compare
     , tstorage := ∅
     }
   let callerCode : YulContract := 
