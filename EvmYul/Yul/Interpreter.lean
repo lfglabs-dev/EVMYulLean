@@ -79,7 +79,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
               | .none =>
                 buildContractCallEmptyReturnState s₀ .none ⟨0⟩ -- Insufficient funds: return 0 to indicate error, with empty return data 
               | .some accountMap₁ =>
-                if s₀.toSharedState.executionEnv.depth ≥ 1024
+                if s₀.executionEnv.depth ≥ 1024
                 then
                   buildContractCallEmptyReturnState s₀ .none ⟨0⟩ -- Reached depth limit: return 0 to indicate error, with empty return data 
                 else
@@ -97,7 +97,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                                                     codeOwner := address,
                                                     source := s₀.executionEnv.codeOwner,
                                                     weiValue := value
-                                                    depth := s₀.toSharedState.executionEnv.depth + 1
+                                                    depth := s₀.executionEnv.depth + 1
                                                 }
                           let sharedState₁ := { sharedState with
                                                   executionEnv := executionEnv₁,
@@ -117,8 +117,8 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                                 -- Restore ExecutionEnv
                                 let executionEnv₃ := { sharedState₂.executionEnv with
                                                     calldata := default,
-                                                    code := s₀.toSharedState.executionEnv.code,
-                                                    codeOwner := s₀.toSharedState.executionEnv.codeOwner,
+                                                    code := s₀.executionEnv.code,
+                                                    codeOwner := s₀.executionEnv.codeOwner,
                                                     source := s₀.executionEnv.source,
                                                     weiValue := s₀.executionEnv.weiValue,
                                                 }
@@ -152,8 +152,8 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                                 -- Restore ExecutionEnv
                                 let executionEnv₃ := { sharedState₂.executionEnv with
                                                     calldata := default,
-                                                    code := s₀.toSharedState.executionEnv.code,
-                                                    codeOwner := s₀.toSharedState.executionEnv.codeOwner,
+                                                    code := s₀.executionEnv.code,
+                                                    codeOwner := s₀.executionEnv.codeOwner,
                                                     source := s₀.executionEnv.source,
                                                     weiValue := s₀.executionEnv.weiValue,
                                                 }
@@ -209,8 +209,8 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                               -- Restore ExecutionEnv
                               let executionEnv₃ := { sharedState₂.executionEnv with
                                                     calldata := default,
-                                                    code := s₀.toSharedState.executionEnv.code,
-                                                    codeOwner := s₀.toSharedState.executionEnv.codeOwner,
+                                                    code := s₀.executionEnv.code,
+                                                    codeOwner := s₀.executionEnv.codeOwner,
                                                     source := s₀.executionEnv.source,
                                                     weiValue := s₀.executionEnv.weiValue,
                                                 }
@@ -220,7 +220,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                                                       H_return := ByteArray.empty,
                                                       executionEnv := executionEnv₃
                                                   }
-                              .ok (setStatic (.Ok sharedState₃ varstore) s₀.toSharedState.executionEnv.perm, [⟨1⟩])
+                              .ok (setStatic (.Ok sharedState₃ varstore) s₀.executionEnv.perm, [⟨1⟩])
                           | .error e => .error e
                           | .ok (s₂, _) =>
                         
@@ -232,8 +232,8 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                               -- Restore ExecutionEnv
                               let executionEnv₃ := { sharedState₂.executionEnv with
                                                     calldata := default,
-                                                    code := s₀.toSharedState.executionEnv.code,
-                                                    codeOwner := s₀.toSharedState.executionEnv.codeOwner,
+                                                    code := s₀.executionEnv.code,
+                                                    codeOwner := s₀.executionEnv.codeOwner,
                                                     source := s₀.executionEnv.source,
                                                     weiValue := s₀.executionEnv.weiValue,
                                                 }
@@ -243,7 +243,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                                                       H_return := ByteArray.empty,
                                                       executionEnv := executionEnv₃
                                                   }
-                              .ok (setStatic (.Ok sharedState₃ varstore) s₀.toSharedState.executionEnv.perm, [⟨1⟩])
+                              .ok (setStatic (.Ok sharedState₃ varstore) s₀.executionEnv.perm, [⟨1⟩])
           | _ => .error .InvalidArguments -- Incorrect number of arguments, this case should be impossible if the Yul code is parsed correctly. Guaranteed by the compiler.
       | .CALLCODE =>
         match args with
@@ -256,7 +256,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
               | .none =>
                   buildContractCallEmptyReturnState s₀ .none ⟨0⟩ -- Insufficient funds: return 0 to indicate error, with empty return data 
               | .some accountMap₁ =>
-                if s₀.toSharedState.executionEnv.depth ≥ 1024
+                if s₀.executionEnv.depth ≥ 1024
                 then
                   buildContractCallEmptyReturnState s₀ accountMap₁ ⟨0⟩ -- Reached depth limit: return 0 to indicate error, with empty return data 
                 else
@@ -273,7 +273,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                                                     code := yulContract.code,
                                                     source := s₀.executionEnv.codeOwner,
                                                     weiValue := value
-                                                    depth := s₀.toSharedState.executionEnv.depth + 1
+                                                    depth := s₀.executionEnv.depth + 1
                                                 }
                           let sharedState₁ := { sharedState with
                                                   executionEnv := executionEnv₁,
@@ -292,8 +292,8 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                                 -- Restore ExecutionEnv
                                 let executionEnv₃ := { sharedState₂.executionEnv with
                                                     calldata := default,
-                                                    code := s₀.toSharedState.executionEnv.code,
-                                                    codeOwner := s₀.toSharedState.executionEnv.codeOwner,
+                                                    code := s₀.executionEnv.code,
+                                                    codeOwner := s₀.executionEnv.codeOwner,
                                                     source := s₀.executionEnv.source,
                                                     weiValue := s₀.executionEnv.weiValue,
                                                 }
@@ -315,8 +315,8 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                                 -- Restore ExecutionEnv
                                 let executionEnv₃ := { sharedState₂.executionEnv with
                                                     calldata := default,
-                                                    code := s₀.toSharedState.executionEnv.code,
-                                                    codeOwner := s₀.toSharedState.executionEnv.codeOwner,
+                                                    code := s₀.executionEnv.code,
+                                                    codeOwner := s₀.executionEnv.codeOwner,
                                                     source := s₀.executionEnv.source,
                                                     weiValue := s₀.executionEnv.weiValue,
                                                 }
@@ -333,7 +333,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
           | _ :: address_arg :: inOffset :: inSize :: outOffset :: outSize :: _ =>
             let address := AccountAddress.ofUInt256 address_arg
             let calldata₁ := s₀.toMachineState.memory.readWithPadding inOffset.toNat inSize.toNat
-            if s₀.toSharedState.executionEnv.depth ≥ 1024
+            if s₀.executionEnv.depth ≥ 1024
             then
               buildContractCallEmptyReturnState s₀ .none ⟨0⟩ -- Reached depth limit: return 0 to indicate error, with empty return data 
             else
@@ -348,7 +348,7 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                       let executionEnv₁ := { sharedState.executionEnv with
                                                 calldata := calldata₁,
                                                 code := yulContract.code,
-                                                depth := s₀.toSharedState.executionEnv.depth + 1
+                                                depth := s₀.executionEnv.depth + 1
                                             }
                       let sharedState₁ := { sharedState with
                                               executionEnv := executionEnv₁,
@@ -366,8 +366,8 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                             -- Restore ExecutionEnv
                             let executionEnv₃ := { sharedState₂.executionEnv with
                                                     calldata := default,
-                                                    code := s₀.toSharedState.executionEnv.code,
-                                                    codeOwner := s₀.toSharedState.executionEnv.codeOwner,
+                                                    code := s₀.executionEnv.code,
+                                                    codeOwner := s₀.executionEnv.codeOwner,
                                                     source := s₀.executionEnv.source,
                                                     weiValue := s₀.executionEnv.weiValue,
                                                 }
@@ -388,8 +388,8 @@ def primCall (fuel : ℕ) (s₀ : State) (prim : Operation .Yul) (args : List Li
                             -- Restore ExecutionEnv
                             let executionEnv₃ := { sharedState₂.executionEnv with
                                                     calldata := default,
-                                                    code := s₀.toSharedState.executionEnv.code,
-                                                    codeOwner := s₀.toSharedState.executionEnv.codeOwner,
+                                                    code := s₀.executionEnv.code,
+                                                    codeOwner := s₀.executionEnv.codeOwner,
                                                     source := s₀.executionEnv.source,
                                                     weiValue := s₀.executionEnv.weiValue,
                                                 }
