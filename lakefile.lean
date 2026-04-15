@@ -61,7 +61,7 @@ extern_lib libleanffi pkg := do
     discard <| IO.Process.run {cmd := "git", args := #["submodule", "update", "--init"]}
 
   let name := nameToStaticLib "leanffi"
-  buildStaticLib (pkg.nativeLibDir / name) #[sha256O, keccak256, ffiO]
+  buildStaticLib (pkg.staticLibDir / name) #[sha256O, keccak256, ffiO]
 
 lean_lib «Conform»
 
