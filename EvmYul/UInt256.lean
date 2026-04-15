@@ -121,7 +121,8 @@ def toSigned (i : ℤ) : UInt256 :=
 
 instance : Complement UInt256 := ⟨EvmYul.UInt256.complement⟩
 
-private def powAux (a : UInt256) (c : UInt256) : ℕ → UInt256
+/-- Binary exponentiation accumulator. Made public for downstream verification. -/
+def powAux (a : UInt256) (c : UInt256) : ℕ → UInt256
   | 0 => a
   | n@(k + 1) => if n % 2 == 1
                  then powAux (a * c) (c * c) (n / 2)
