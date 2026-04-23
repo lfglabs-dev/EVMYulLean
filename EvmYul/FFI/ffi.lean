@@ -15,7 +15,7 @@ def BLAKE2 (d : ByteArray) : Except String ByteArray := do
   return BLAKE2Compress d
 
 @[extern "memset_zero"]
-opaque ByteArray.zeroes (n : USize) : ByteArray
+def ByteArray.zeroes (n : USize) : ByteArray := ⟨Array.replicate n.toNat 0⟩
 
 @[extern "keccak256"]
 opaque keccak256 (input : @& ByteArray) (len : USize) : ByteArray
