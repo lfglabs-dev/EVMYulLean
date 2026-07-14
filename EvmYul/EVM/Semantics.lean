@@ -745,7 +745,7 @@ def Θ (fuel : Nat)
   let σ'₁ :=
     match σ.find? r with
       | none =>
-        if v != ⟨0⟩ then
+        if v != UInt256.ofNat 0 then
           σ.insert r { (default : Account .EVM) with balance := v}
         else
           σ

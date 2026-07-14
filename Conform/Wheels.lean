@@ -32,10 +32,10 @@ def getObjValAsD! (j : Json) (α : Type) [FromJson α] [Inhabited α] (k : Strin
 
 def getObjVals?
   (self : Json) (α β : Type) [Ord α] [FromJson α] [FromJson β] : Except String (Batteries.RBMap α β compare) := do
-  let keys ← Array.map Sigma.fst <$> RBNode.toArray <$> self.getObj?
+  let keys : Array String ← Array.map Prod.fst <$> Std.TreeMap.Raw.toArray <$> self.getObj?
   let mut result : Batteries.RBMap α β compare := ∅
   for k in keys do
-    if let .ok key := FromJson.fromJson? k then
+    if let .ok key := FromJson.fromJson? (Json.str k) then
     result := result.insert key (← self.getObjValAs? β k)
   pure result
 
