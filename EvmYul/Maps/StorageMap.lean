@@ -44,7 +44,7 @@ def toBlobs (pair : UInt256 × UInt256) : Option (String × String) := do
   pure (EvmYul.toHex kec, EvmYul.toHex rlp)
 
 def computeTrieRoot (storage : Storage) : Option ByteArray :=
-  match Array.mapM toBlobs storage.1.toArray with
+  match Array.mapM toBlobs storage.toArray with
     | none => .none
     | some pairs => (ByteArray.ofBlob (blobComputeTrieRoot pairs)).toOption
 

@@ -106,7 +106,3 @@ def computeToList! {α}
                    [LE α] [IsTrans α (· ≤ ·)] [IsAntisymm α (· ≤ ·)] [IsTotal α (· ≤ ·)]
                    [DecidableRel (α := α) (· ≤ ·)] (m : Multiset α) : List α :=
   m.sort (· ≤ ·)
-
-def Std.TreeMap.partition {α β : Type} {cmp : α → α → Ordering}
-  (t : Std.TreeMap α β cmp) (p : α → β → Bool) : Std.TreeMap α β cmp × Std.TreeMap α β cmp :=
-  (t.filter p, t.filter (λ k v ↦ not (p k v)))
