@@ -12,7 +12,7 @@ private def basicSuccess (name : System.FilePath)
 
 private def success (result : Std.TreeMap String EvmYul.Conform.TestResult compare) : Array String × Array String :=
   let (succeeded, failed) := result.partition (λ _ v ↦ v.isNone)
-  (succeeded.keys, failed.keys)
+  (succeeded.keysArray, failed.keysArray)
 
 def logFile (phase : ℕ) : System.FilePath := s!"tests_{phase}.txt"
 
