@@ -126,7 +126,7 @@ partial def translatePrimOp (primOp : PrimOp) : TermElabM Term := do
   where
     familyAndInstr (primOp : PrimOp) : TermElabM (String × String) := do
       let family :: instr :: [] := toString primOp |>.splitOn | throwError s!"{primOp} shape not <family> <instruction>"
-      pure (family, instr.drop 1 |>.dropRight 1)
+      pure (family, (instr.drop 1).dropEnd 1 |>.toString)
     YulTag : Name := "EvmYul.OperationType.Yul".toName
 
 partial def translateIdent (idn : TSyntax `ident) : TSyntax `term :=

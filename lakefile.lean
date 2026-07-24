@@ -2,14 +2,14 @@ import Lake
 open Lake DSL System
 
 require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git"@"v4.24.0"
+  "https://github.com/leanprover-community/mathlib4.git"@"v4.31.0"
 
 package «evmyul» {
   moreLeanArgs := #["-DautoImplicit=false"]
   moreServerOptions := #[⟨`autoImplicit, false⟩]
 }
 
-def cloneWithCache (pkg : NPackage _package.name) (dirname url : String) : FetchM (Job GitRepo) := do
+def cloneWithCache (pkg : NPackage __name__) (dirname url : String) : FetchM (Job GitRepo) := do
   let repoDir : GitRepo := ⟨pkg.dir / dirname⟩
   if !(← repoDir.dir.pathExists) then dbg_trace s!"Cloning: {url}"; GitRepo.clone url repoDir
   return pure repoDir

@@ -88,7 +88,7 @@ structure TestEntry where
   sealEngine         : Json := ""
   deriving Inhabited
 
-abbrev TestMap := Batteries.RBMap String TestEntry compare
+abbrev TestMap := Std.TreeMap String TestEntry compare
 
 abbrev AccessListEntry := AccountAddress × Array UInt256
 
