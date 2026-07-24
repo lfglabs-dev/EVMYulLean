@@ -938,10 +938,10 @@ def Υ (fuel : ℕ)
     if beneficiaryFee != ⟨0⟩ then
       σStar.increaseBalance .EVM H.beneficiary beneficiaryFee
     else σStar
-  let σ' := A.selfDestructSet.1.foldl Std.TreeMap.erase σStar' -- (87)
+  let σ' := A.selfDestructSet.foldl (fun state addr => state.erase addr) σStar' -- (87)
   let deadAccounts := A.touchedAccounts.filter (State.dead σStar' ·)
-  let σ' := deadAccounts.foldl Std.TreeMap.erase σ' -- (88)
-  let σ' := σ'.map λ (addr, acc) ↦ (addr, { acc with tstorage := .empty})
+  let σ' := deadAccounts.foldl (fun state addr => state.erase addr) σ' -- (88)
+  let σ' := σ'.foldl (fun state addr acc => state.insert addr { acc with tstorage := .empty }) ∅
   .ok (σ', A, z, T.base.gasLimit - gStar)
 end EVM
 
