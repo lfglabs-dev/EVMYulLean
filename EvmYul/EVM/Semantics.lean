@@ -816,7 +816,7 @@ def Θ (fuel : Nat)
 
 end
 
-open Batteries (RBMap RBSet)
+open Std (TreeMap TreeSet)
 
 
 -- Type Υ using \Upsilon or \GU
@@ -938,9 +938,9 @@ def Υ (fuel : ℕ)
     if beneficiaryFee != ⟨0⟩ then
       σStar.increaseBalance .EVM H.beneficiary beneficiaryFee
     else σStar
-  let σ' := A.selfDestructSet.1.foldl Batteries.RBMap.erase σStar' -- (87)
+  let σ' := A.selfDestructSet.1.foldl Std.TreeMap.erase σStar' -- (87)
   let deadAccounts := A.touchedAccounts.filter (State.dead σStar' ·)
-  let σ' := deadAccounts.foldl Batteries.RBMap.erase σ' -- (88)
+  let σ' := deadAccounts.foldl Std.TreeMap.erase σ' -- (88)
   let σ' := σ'.map λ (addr, acc) ↦ (addr, { acc with tstorage := .empty})
   .ok (σ', A, z, T.base.gasLimit - gStar)
 end EVM
