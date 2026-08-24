@@ -96,13 +96,22 @@ def fetchInstr (I : EvmYul.ExecutionEnv .EVM) (pc : UInt256) :
                Except EVM.ExecutionException (Operation .EVM × Option (UInt256 × Nat)) :=
   decode I.code pc |>.option (.error .StackUnderflow) Except.ok
 
-partial def D_J_aux (c : ByteArray) (i : UInt256) (result : Array UInt256) : Array UInt256 :=
-  match c.get? i.toNat >>= EvmYul.EVM.parseInstr with
-    | none => result
-    | some cᵢ => D_J_aux c (N i cᵢ) (if cᵢ = .JUMPDEST then result.push i else result)
+def D_J_aux (c : ByteArray) : (fuel : Nat) → (i : Nat) → (result : Array UInt256) → Array UInt256
+  | 0, _, result => result
+  | fuel + 1, i, result =>
+    if h : i < c.size then
+      match EvmYul.EVM.parseInstr c[i] with
+      | none => result
+      | some cᵢ =>
+        D_J_aux c fuel (i + 1 + argOnNBytesOfInstr cᵢ)
+          (if cᵢ = .JUMPDEST then result.push (.ofNat i) else result)
+    else
+      result
 
 def D_J (c : ByteArray) (i : UInt256) : Array UInt256 :=
-  D_J_aux c i #[]
+  D_J_aux c c.size i.toNat #[]
+
+example : D_J ⟨#[0x5b, 0x60, 0x5b, 0x5b]⟩ ⟨0⟩ = #[⟨0⟩, ⟨3⟩] := by decide
 
 private def BitVec.ofFn {k} (x : Fin k → Bool) : BitVec k :=
   BitVec.ofNat k (natOfBools (Vector.ofFn x))
