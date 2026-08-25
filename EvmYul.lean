@@ -31,6 +31,7 @@ import EvmYul.EVM.PrecompiledContracts
 import EvmYul.EVM.Gas
 import EvmYul.EVM.GasConstants
 import EvmYul.EVM.Proof.Execution
+import EvmYul.EVM.Proof.Interpreter
 
 import EvmYul.Maps.AccountMap
 import EvmYul.Maps.ByteMap
