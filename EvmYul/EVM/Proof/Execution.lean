@@ -293,86 +293,120 @@ theorem X_succ_of_revert {fuel : ℕ} {validJumps : Array UInt256} {pre mid post
 the fuel explicitly, because `X` decrements fuel on every iteration and passes it
 to `step` (where it bounds `CALL`/`CREATE` recursion). -/
 
-/-- One non-halting iteration of `X` at fuel `fuel + 1`, from `pre` to `post`. -/
-def XStep (validJumps : Array UInt256) (fuel : ℕ) (pre post : State) : Prop :=
-  ∃ mid gasCost,
+/-- One non-halting iteration of `X` at fuel `fuel + 1`, charging `gasCost`. -/
+def XStepAt (validJumps : Array UInt256) (fuel gasCost : ℕ) (pre post : State) : Prop :=
+  ∃ mid,
     Z validJumps (decodeAt pre).1 pre = .ok (mid, gasCost) ∧
     StepOk fuel gasCost (decodeAt pre) mid post ∧
     H post.toMachineState (decodeAt pre).1 = none
 
+/-- One non-halting iteration of `X` at fuel `fuel + 1`, from `pre` to `post`. -/
+def XStep (validJumps : Array UInt256) (fuel : ℕ) (pre post : State) : Prop :=
+  ∃ gasCost, XStepAt validJumps fuel gasCost pre post
+
+theorem XStepAt.X_succ {validJumps : Array UInt256} {fuel gasCost : ℕ} {pre post : State}
+    (h : XStepAt validJumps fuel gasCost pre post) :
+    X (fuel + 1) validJumps pre = X fuel validJumps post := by
+  obtain ⟨mid, hZ, hstep, hH⟩ := h
+  exact X_succ_of_continue rfl hZ hstep hH
+
 theorem XStep.X_succ {validJumps : Array UInt256} {fuel : ℕ} {pre post : State}
     (h : XStep validJumps fuel pre post) :
     X (fuel + 1) validJumps pre = X fuel validJumps post := by
-  obtain ⟨mid, gasCost, hZ, hstep, hH⟩ := h
-  exact X_succ_of_continue rfl hZ hstep hH
+  obtain ⟨_, h⟩ := h
+  exact h.X_succ
+
+/-- `Z` is a function, so an `XStep` fixes both the gas it charges and its
+post-state. -/
+theorem XStepAt.deterministic {validJumps : Array UInt256} {fuel gas₁ gas₂ : ℕ}
+    {pre post₁ post₂ : State}
+    (h₁ : XStepAt validJumps fuel gas₁ pre post₁) (h₂ : XStepAt validJumps fuel gas₂ pre post₂) :
+    gas₁ = gas₂ ∧ post₁ = post₂ := by
+  obtain ⟨mid₁, hZ₁, hstep₁, -⟩ := h₁
+  obtain ⟨mid₂, hZ₂, hstep₂, -⟩ := h₂
+  rw [hZ₁] at hZ₂
+  obtain ⟨rfl, rfl⟩ := Prod.mk.injEq .. ▸ Except.ok.inj hZ₂
+  exact ⟨rfl, Step.deterministic_ok hstep₁ hstep₂⟩
 
 theorem XStep.deterministic {validJumps : Array UInt256} {fuel : ℕ} {pre post₁ post₂ : State}
     (h₁ : XStep validJumps fuel pre post₁) (h₂ : XStep validJumps fuel pre post₂) :
     post₁ = post₂ := by
-  obtain ⟨mid₁, gas₁, hZ₁, hstep₁, -⟩ := h₁
-  obtain ⟨mid₂, gas₂, hZ₂, hstep₂, -⟩ := h₂
-  rw [hZ₁] at hZ₂
-  obtain ⟨rfl, rfl⟩ := Prod.mk.injEq .. ▸ Except.ok.inj hZ₂
-  exact Step.deterministic_ok hstep₁ hstep₂
+  obtain ⟨_, h₁⟩ := h₁
+  obtain ⟨_, h₂⟩ := h₂
+  exact (XStepAt.deterministic h₁ h₂).2
 
 /-- `XStep` factors through the raw step relation: `Z` produces the gas cost, and
 the instruction is then run by `EvmYul.EVM.step`. -/
-theorem XStep.toRuns {validJumps : Array UInt256} {fuel : ℕ} {pre post : State}
-    (h : XStep validJumps fuel pre post) :
-    ∃ mid gasCost, Z validJumps (decodeAt pre).1 pre = .ok (mid, gasCost) ∧
+theorem XStepAt.toRuns {validJumps : Array UInt256} {fuel gasCost : ℕ} {pre post : State}
+    (h : XStepAt validJumps fuel gasCost pre post) :
+    ∃ mid, Z validJumps (decodeAt pre).1 pre = .ok (mid, gasCost) ∧
       Runs [(fuel, gasCost, decodeAt pre)] mid post := by
-  obtain ⟨mid, gasCost, hZ, hstep, -⟩ := h
-  exact ⟨mid, gasCost, hZ, .one hstep⟩
+  obtain ⟨mid, hZ, hstep, -⟩ := h
+  exact ⟨mid, hZ, .one hstep⟩
 
-/-- `X` runs from `pre` at fuel `fuel` down to `post` at fuel `rem`, never halting. -/
-inductive XRuns (validJumps : Array UInt256) : ℕ → State → ℕ → State → Prop
-  | refl (fuel : ℕ) (state : State) : XRuns validJumps fuel state fuel state
-  | cons {fuel rem : ℕ} {pre mid post : State}
-      (step : XStep validJumps fuel pre mid) (tail : XRuns validJumps fuel mid rem post) :
-      XRuns validJumps (fuel + 1) pre rem post
+/-- `X` runs from `pre` at fuel `fuel` down to `post` at fuel `rem`, never halting,
+executing exactly `trace`.
+
+The trace is an index rather than an existential, so a run *carries* the
+instructions it took, each with the fuel and the gas cost `X` used for it. That
+is what makes the fuel accounting in `XRuns.length` a statement about this run
+rather than about some list of the right length. -/
+inductive XRuns (validJumps : Array UInt256) : ℕ → State → List Labelled → ℕ → State → Prop
+  | refl (fuel : ℕ) (state : State) : XRuns validJumps fuel state [] fuel state
+  | cons {fuel gasCost rem : ℕ} {pre mid post : State} {trace : List Labelled}
+      (step : XStepAt validJumps fuel gasCost pre mid)
+      (tail : XRuns validJumps fuel mid trace rem post) :
+      XRuns validJumps (fuel + 1) pre ((fuel, gasCost, decodeAt pre) :: trace) rem post
 
 /-- The decomposition theorem: a non-halting `X`-run may be replaced by its tail. -/
-theorem XRuns.X_eq {validJumps : Array UInt256} {fuel rem : ℕ} {pre post : State}
-    (h : XRuns validJumps fuel pre rem post) :
+theorem XRuns.X_eq {validJumps : Array UInt256} {fuel rem : ℕ} {trace : List Labelled}
+    {pre post : State} (h : XRuns validJumps fuel pre trace rem post) :
     X fuel validJumps pre = X rem validJumps post := by
   induction h with
   | refl => rfl
   | cons step _ ih => exact (step.X_succ).trans ih
 
-theorem XRuns.rem_le {validJumps : Array UInt256} {fuel rem : ℕ} {pre post : State}
-    (h : XRuns validJumps fuel pre rem post) : rem ≤ fuel := by
+/-- `X` spends exactly one unit of fuel per instruction it executes. -/
+theorem XRuns.length {validJumps : Array UInt256} {fuel rem : ℕ} {trace : List Labelled}
+    {pre post : State} (h : XRuns validJumps fuel pre trace rem post) :
+    trace.length + rem = fuel := by
   induction h with
-  | refl => exact Nat.le_refl _
-  | cons _ _ ih => exact Nat.le_succ_of_le ih
+  | refl => simp
+  | cons _ _ ih => simp only [List.length_cons]; omega
 
-theorem XRuns.trans {validJumps : Array UInt256} {f g r : ℕ} {s₀ s₁ s₂ : State}
-    (h₁ : XRuns validJumps f s₀ g s₁) (h₂ : XRuns validJumps g s₁ r s₂) :
-    XRuns validJumps f s₀ r s₂ := by
+theorem XRuns.rem_le {validJumps : Array UInt256} {fuel rem : ℕ} {trace : List Labelled}
+    {pre post : State} (h : XRuns validJumps fuel pre trace rem post) : rem ≤ fuel :=
+  h.length ▸ Nat.le_add_left _ _
+
+theorem XRuns.trans {validJumps : Array UInt256} {f g r : ℕ} {xs ys : List Labelled}
+    {s₀ s₁ s₂ : State}
+    (h₁ : XRuns validJumps f s₀ xs g s₁) (h₂ : XRuns validJumps g s₁ ys r s₂) :
+    XRuns validJumps f s₀ (xs ++ ys) r s₂ := by
   induction h₁ with
-  | refl => exact h₂
+  | refl => simpa using h₂
   | cons step _ ih => exact .cons step (ih h₂)
 
-/-- Every `X`-run is a raw run, and consumes exactly one fuel unit per instruction. -/
-theorem XRuns.length {validJumps : Array UInt256} {fuel rem : ℕ} {pre post : State}
-    (h : XRuns validJumps fuel pre rem post) :
-    ∃ trace : List Labelled, trace.length + rem = fuel := by
-  induction h with
-  | refl f s => exact ⟨[], by simp⟩
-  | @cons fuel rem pre mid post hstep _ ih =>
-      obtain ⟨trace, hlen⟩ := ih
-      exact ⟨(fuel, 0, decodeAt pre) :: trace, by simp only [List.length_cons]; omega⟩
+/-- Each trace entry is a genuine `XStepAt` of this run, and the entry's fuel is
+the fuel `X` had left when it reached that instruction. -/
+theorem XRuns.head_step {validJumps : Array UInt256} {fuel gasCost rem : ℕ}
+    {instr : Instruction} {trace : List Labelled} {pre post : State}
+    (h : XRuns validJumps fuel pre ((fuel - 1, gasCost, instr) :: trace) rem post) :
+    ∃ mid, XStepAt validJumps (fuel - 1) gasCost pre mid ∧
+      instr = decodeAt pre ∧ XRuns validJumps (fuel - 1) mid trace rem post := by
+  cases h with
+  | cons step tail => exact ⟨_, step, rfl, tail⟩
 
 /-- An `X`-run that exhausts its fuel without halting runs out of fuel. -/
-theorem XRuns.X_outOfFuel {validJumps : Array UInt256} {fuel : ℕ} {pre post : State}
-    (h : XRuns validJumps fuel pre 0 post) :
+theorem XRuns.X_outOfFuel {validJumps : Array UInt256} {fuel : ℕ} {trace : List Labelled}
+    {pre post : State} (h : XRuns validJumps fuel pre trace 0 post) :
     X fuel validJumps pre = .error .OutOfFuel := by
   rw [h.X_eq, X_zero]
 
 /-- An `X`-run followed by a normal halt determines `X`'s result. -/
-theorem XRuns.X_success {validJumps : Array UInt256} {fuel rem : ℕ}
+theorem XRuns.X_success {validJumps : Array UInt256} {fuel rem : ℕ} {trace : List Labelled}
     {pre halting mid post : State} {w : Operation .EVM} {arg : Option (UInt256 × Nat)}
     {gasCost : ℕ} {o : ByteArray}
-    (hrun : XRuns validJumps fuel pre (rem + 1) halting)
+    (hrun : XRuns validJumps fuel pre trace (rem + 1) halting)
     (hdec : decodeAt halting = (w, arg))
     (hZ : Z validJumps w halting = .ok (mid, gasCost))
     (hstep : StepOk rem gasCost (w, arg) mid post)
@@ -383,6 +417,9 @@ theorem XRuns.X_success {validJumps : Array UInt256} {fuel rem : ℕ}
   exact X_succ_of_halt hdec hZ hstep hH hw
 
 /-! ## Non-vacuity
+
+`Step`, `Runs`, `XStepAt` and `XRuns` are all inhabited beyond their reflexive
+cases, so none of the theorems above is proved about an empty relation.
 
 `JUMPDEST` is the cheapest instruction that `X` continues through: it only pays
 gas and advances the program counter.  Its step is computed symbolically, for an
@@ -401,6 +438,50 @@ theorem step_JUMPDEST (fuel gasCost : ℕ) (pre : State) :
 
 @[simp] theorem H_JUMPDEST (μ : MachineState) : H μ .JUMPDEST = none := by
   rfl
+
+/-- `Z` accepts `JUMPDEST` whenever the state can pay for it and the stack is not
+already full.  `JUMPDEST` touches no memory, so it expands none and its whole
+cost is `Gjumpdest`. -/
+theorem Z_JUMPDEST (validJumps : Array UInt256) (pre : State)
+    (hgas : GasConstants.Gjumpdest ≤ (pre.gasAvailable - UInt256.ofNat 0).toNat)
+    (hstack : pre.stack.length ≤ 1024) :
+    Z validJumps .JUMPDEST pre
+      = .ok ({pre with gasAvailable := pre.gasAvailable - UInt256.ofNat 0},
+             GasConstants.Gjumpdest) := by
+  simp only [GasConstants.Gjumpdest] at hgas
+  simp only [Z, W, memoryExpansionCost, memoryExpansionCost.μᵢ', Nat.sub_self, C',
+    GasConstants.Gjumpdest]
+  rw [if_neg (by omega), if_neg (by omega)]
+  simp only [δ, α, Operation.isCreate, reduceIte, reduceCtorEq, false_and, Bind.bind, Except.bind,
+    pure, Except.pure]
+  simp [hstack]
+
+/-- `XStepAt` is inhabited: every `JUMPDEST` that `X` can pay for is one
+non-halting iteration of `X`. -/
+theorem xStepAt_JUMPDEST {validJumps : Array UInt256} {fuel : ℕ} {pre : State}
+    (hdec : decodeAt pre = (.JUMPDEST, none))
+    (hgas : GasConstants.Gjumpdest ≤ (pre.gasAvailable - UInt256.ofNat 0).toNat)
+    (hstack : pre.stack.length ≤ 1024) :
+    XStepAt validJumps (fuel + 1) GasConstants.Gjumpdest pre
+      (stepPre GasConstants.Gjumpdest
+        { pre with gasAvailable := pre.gasAvailable - UInt256.ofNat 0 }).incrPC := by
+  refine ⟨{ pre with gasAvailable := pre.gasAvailable - UInt256.ofNat 0 }, ?_, ?_, ?_⟩
+  · simp only [hdec]; exact Z_JUMPDEST validJumps pre hgas hstack
+  · simp only [hdec]; exact step_JUMPDEST ..
+  · simp only [hdec]; exact H_JUMPDEST _
+
+/-- `XRuns` is inhabited beyond `refl`, so the `X`-level API is not vacuous. -/
+theorem xRuns_one_JUMPDEST {validJumps : Array UInt256} {fuel : ℕ} {pre : State}
+    (hdec : decodeAt pre = (.JUMPDEST, none))
+    (hgas : GasConstants.Gjumpdest ≤ (pre.gasAvailable - UInt256.ofNat 0).toNat)
+    (hstack : pre.stack.length ≤ 1024) :
+    XRuns validJumps (fuel + 2) pre [(fuel + 1, GasConstants.Gjumpdest, (.JUMPDEST, none))]
+      (fuel + 1)
+      (stepPre GasConstants.Gjumpdest
+        { pre with gasAvailable := pre.gasAvailable - UInt256.ofNat 0 }).incrPC := by
+  have h := XRuns.cons (xStepAt_JUMPDEST (validJumps := validJumps) hdec hgas hstack)
+    (.refl (fuel + 1) _)
+  rwa [hdec] at h
 
 /-- `Runs` is inhabited at every pre-state: two `JUMPDEST`s advance the counter twice. -/
 theorem runs_two_JUMPDEST (fuel gasCost : ℕ) (pre : State) :
