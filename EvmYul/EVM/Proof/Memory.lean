@@ -57,6 +57,23 @@ shape `μ.memory.readWithPadding a l = …` wants, in rough order of usefulness:
 `EvmYul.UInt256.size_toByteArray` (a stored word is exactly 32 bytes) is the
 side condition most of the `MSTORE` lemmas need supplied at their call sites.
 
+Every lemma above ends at `sval.toByteArray`, which says nothing about the bytes
+themselves. To get *contents* rather than a `ByteArray`:
+
+| Goal shape | Lemma |
+| --- | --- |
+| the 32 bytes of a stored word | `EvmYul.UInt256.toList_data_toByteArray` |
+| one byte of a stored word, as `ℕ` | `EvmYul.UInt256.toNat_get!_toByteArray` |
+| a stored word as a `List ℕ` | `EvmYul.UInt256.map_toNat_get!_toByteArray` |
+| `MSTORE(0, v)`; `RETURN(0, 32)` as a `List ℕ` | `EvmYul.MachineState.map_toNat_get!_H_return_evmReturn_mstore_zero` |
+| the same, one byte at a time | `EvmYul.MachineState.toNat_get!_H_return_evmReturn_mstore_zero` |
+
+These bottom out in `EvmYul.toBeBytesFixed`, the public fixed-width big-endian
+encoder in `EvmYul.UInt256`, whose digits are `EvmYul.getElem_toBeBytesFixed` /
+`EvmYul.toNat_getElem_toBeBytesFixed`. `EvmYul.toBytesBigEndian` itself is built
+from the private, well-founded `toBytes'` and cannot be unfolded downstream;
+`EvmYul.toBeBytesFixed_eq_zeroPad` is the bridge that removes the need to.
+
 ## Where the in-bounds hypotheses come from
 
 `write` and `readWithPadding` genuinely behave differently when a span runs past
@@ -427,6 +444,61 @@ theorem UInt256.size_toByteArray (v : UInt256) : (UInt256.toByteArray v).size = 
       ffi.ByteArray.toNat_usizeSub_of_le _ hle]
   omega
 
+/-! ## What is *in* a stored word
+
+`size_toByteArray` says a stored word is 32 bytes wide; the lemmas below say
+which 32 bytes. `UInt256.toByteArray` is `zeroes (32 - |BE v|) ++ BE v`, and
+`EvmYul.toBeBytesFixed_eq_zeroPad` says the fixed-width big-endian expansion has
+exactly that shape, so the two agree byte for byte. Nothing here unfolds the
+private `toBytes'`: the padding structure comes from `toBeBytesFixed_eq_zeroPad`
+and the digits from `getElem_toBeBytesFixed`. -/
+
+/-- **The contents of a stored word**, as a list. -/
+theorem UInt256.toList_data_toByteArray (v : UInt256) :
+    (UInt256.toByteArray v).data.toList = toBeBytesFixed v.toNat 32 := by
+  have hBE : (BE v.toNat).data.toList = toBytesBigEndian v.toNat :=
+    List.toList_data_toByteArray
+  have hsize : (BE v.toNat).size = (toBytesBigEndian v.toNat).length :=
+    List.size_toByteArray
+  have hle : (BE v.toNat).size ≤ 32 := by
+    simpa [BE] using EvmYul.length_toBytesBigEndian_le (n := v.toNat) v.val.isLt
+  have hlt : v.toNat < 256 ^ 32 := by
+    rw [show (256 : ℕ) ^ 32 = UInt256.size from by norm_num [UInt256.size]]
+    exact v.val.isLt
+  have hz : ∀ u : USize, (ffi.ByteArray.zeroes u).data.toList = List.replicate u.toNat 0 := by
+    intro u; simp [ffi.ByteArray.zeroes]
+  rw [toBeBytesFixed_eq_zeroPad v.toNat 32 hlt]
+  unfold UInt256.toByteArray
+  rw [ByteArray.toList_data_append, hz, hBE,
+      ffi.ByteArray.toNat_usizeSub_of_le _ hle, hsize]
+
+/-- **A single byte of a stored word**, read out with `ByteArray.get!` and as a
+`ℕ`. Index `i` counts from the most significant end, so it names the `31 - i`-th
+base-256 digit. -/
+theorem UInt256.toNat_get!_toByteArray (v : UInt256) (i : ℕ) (h : i < 32) :
+    ((UInt256.toByteArray v).get! i).toNat = v.toNat / 256 ^ (31 - i) % 256 := by
+  have hlist : i < (UInt256.toByteArray v).data.toList.length := by
+    rw [UInt256.toList_data_toByteArray]; simpa using h
+  have hidx : i < (UInt256.toByteArray v).data.size := by simpa using hlist
+  show ((UInt256.toByteArray v).data[i]!).toNat = _
+  rw [getElem!_pos (UInt256.toByteArray v).data i hidx, ← Array.getElem_toList hidx]
+  rw [List.getElem_of_eq (UInt256.toList_data_toByteArray v)
+        (by simpa [UInt256.size_toByteArray] using h),
+      toNat_getElem_toBeBytesFixed]
+
+/-- **The contents of a stored word, in the shape a `List ℕ` observation takes.**
+`(List.range size).map (fun i ↦ (get! i).toNat)` is how a consumer that publishes
+bytes as naturals reads a `ByteArray`; this pins that list to the base-256 digits
+of the word, with no `ByteArray` and no `UInt256` left in it. -/
+theorem UInt256.map_toNat_get!_toByteArray (v : UInt256) :
+    (List.range (UInt256.toByteArray v).size).map
+        (fun i => ((UInt256.toByteArray v).get! i).toNat)
+      = (List.range 32).map (fun i => v.toNat / 256 ^ (32 - 1 - i) % 256) := by
+  rw [UInt256.size_toByteArray]
+  refine List.ext_getElem (by simp) fun i h₁ _ => ?_
+  have hi : i < 32 := by simpa using h₁
+  simpa using UInt256.toNat_get!_toByteArray v i hi
+
 namespace MachineState
 
 /-! ## The `MachineState` layer
@@ -572,6 +644,42 @@ theorem H_return_evmReturn_mstore_zero (μ : MachineState) (sval s : UInt256)
   H_return_evmReturn_mstore_of_le μ ⟨0⟩ sval s hs (by
     show (0 : ℕ) ≤ _
     exact Nat.zero_le _)
+
+/-! ## The residual with the word opened up
+
+The lemmas above end at `sval.toByteArray`, which is opaque. Composing them with
+`UInt256.toList_data_toByteArray` and `UInt256.map_toNat_get!_toByteArray` ends
+them at the base-256 digits of `sval` instead, which is what a correspondence
+proof against an abstract big-endian encoder actually has to match. -/
+
+/-- Reading back an `MSTORE`d word, as bytes rather than as a `ByteArray`. -/
+theorem toList_data_readWithPadding_memory_mstore_of_le
+    (μ : MachineState) (spos sval : UInt256) (hstart : spos.toNat ≤ μ.memory.size) :
+    ((μ.mstore spos sval).memory.readWithPadding spos.toNat 32).data.toList
+      = toBeBytesFixed sval.toNat 32 := by
+  rw [readWithPadding_memory_mstore_of_le μ spos sval hstart,
+      UInt256.toList_data_toByteArray]
+
+/-- **`MSTORE(0, v)` then `RETURN(0, 32)`, byte by byte.** No hypothesis about
+memory, and no `UInt256` or `ByteArray` on the right: the `i`-th published byte
+is the `31 - i`-th base-256 digit of the stored word. -/
+theorem toNat_get!_H_return_evmReturn_mstore_zero (μ : MachineState) (sval s : UInt256)
+    (hs : s.toNat = 32) (i : ℕ) (hi : i < 32) :
+    ((((μ.mstore ⟨0⟩ sval).evmReturn ⟨0⟩ s).H_return).get! i).toNat
+      = sval.toNat / 256 ^ (31 - i) % 256 := by
+  rw [H_return_evmReturn_mstore_zero μ sval s hs]
+  exact UInt256.toNat_get!_toByteArray sval i hi
+
+/-- **The same residual as a `List ℕ`.** This is the shape a consumer that
+observes return data as `(List.range size).map (fun i ↦ (get! i).toNat)` is left
+with, with the encoding fully computed. -/
+theorem map_toNat_get!_H_return_evmReturn_mstore_zero (μ : MachineState) (sval s : UInt256)
+    (hs : s.toNat = 32) :
+    (List.range ((μ.mstore ⟨0⟩ sval).evmReturn ⟨0⟩ s).H_return.size).map
+        (fun i => (((μ.mstore ⟨0⟩ sval).evmReturn ⟨0⟩ s).H_return.get! i).toNat)
+      = (List.range 32).map (fun i => sval.toNat / 256 ^ (32 - 1 - i) % 256) := by
+  rw [H_return_evmReturn_mstore_zero μ sval s hs]
+  exact UInt256.map_toNat_get!_toByteArray sval
 
 end MachineState
 

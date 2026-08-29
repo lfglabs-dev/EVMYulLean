@@ -386,6 +386,128 @@ def fromBytes_if_you_really_must? (bs : List UInt8) : UInt256 :=
 
 def toBytes! (n : UInt256) : List UInt8 := zeroPadBytes 32 (toBytes' n.1)
 
+/-! ## Byte *contents* of the big-endian encoding
+
+`toBytes'` is private, well-founded, and variable-length, so downstream files can
+say how *long* an encoding is but not what is *in* it. The definitions below are
+the public, fixed-width, structurally recursive counterparts, and
+`toBeBytesFixed_eq_zeroPad` is the bridge that identifies them with
+`toBytesBigEndian` under left zero-padding. Everything a consumer needs about
+individual bytes then follows from `getElem_toLeBytesFixed` without ever
+mentioning `toBytes'`. -/
+
+/-- The width-`w` little-endian base-256 expansion of `n`. Structural in the
+width, hence unfoldable by consumers, unlike `toBytes'`. -/
+def toLeBytesFixed : ℕ → ℕ → List UInt8
+  | _, 0 => []
+  | n, w + 1 => UInt8.ofNat (n % 256) :: toLeBytesFixed (n / 256) w
+
+/-- The width-`w` big-endian base-256 expansion of `n`. -/
+def toBeBytesFixed (n w : ℕ) : List UInt8 := (toLeBytesFixed n w).reverse
+
+@[simp] lemma length_toLeBytesFixed (n w : ℕ) : (toLeBytesFixed n w).length = w := by
+  induction w generalizing n with
+  | zero => rfl
+  | succ w ih => simp [toLeBytesFixed, ih]
+
+@[simp] lemma length_toBeBytesFixed (n w : ℕ) : (toBeBytesFixed n w).length = w := by
+  simp [toBeBytesFixed]
+
+/-- **Every digit of the little-endian expansion, in closed form.** -/
+lemma getElem_toLeBytesFixed (n w i : ℕ) (h : i < (toLeBytesFixed n w).length) :
+    (toLeBytesFixed n w)[i] = UInt8.ofNat (n / 256 ^ i % 256) := by
+  induction w generalizing n i with
+  | zero => simp at h
+  | succ w ih =>
+    match i with
+    | 0 => simp [toLeBytesFixed]
+    | i + 1 =>
+      have h' : i < (toLeBytesFixed (n / 256) w).length := by
+        simp only [length_toLeBytesFixed] at h ⊢; omega
+      have : n / 256 / 256 ^ i = n / 256 ^ (i + 1) := by
+        rw [Nat.div_div_eq_div_mul, ← pow_succ']
+      simpa [toLeBytesFixed, this] using ih (n / 256) i h'
+
+/-- **Every digit of the big-endian expansion, in closed form.** Index `i`
+counts from the most significant end, so it names the `w - 1 - i`-th power. -/
+lemma getElem_toBeBytesFixed (n w i : ℕ) (h : i < (toBeBytesFixed n w).length) :
+    (toBeBytesFixed n w)[i] = UInt8.ofNat (n / 256 ^ (w - 1 - i) % 256) := by
+  have hi : i < w := by simpa using h
+  show (toLeBytesFixed n w).reverse[i]'(by simpa using hi) = _
+  rw [List.getElem_reverse (by simp; omega), getElem_toLeBytesFixed]
+  simp only [length_toLeBytesFixed]
+
+/-- `getElem_toLeBytesFixed` with the byte read as a `ℕ`. -/
+lemma toNat_getElem_toLeBytesFixed (n w i : ℕ) (h : i < (toLeBytesFixed n w).length) :
+    ((toLeBytesFixed n w)[i]).toNat = n / 256 ^ i % 256 := by
+  rw [getElem_toLeBytesFixed]
+  simp
+
+/-- `getElem_toBeBytesFixed` with the byte read as a `ℕ`. This is the form a
+consumer working with a `List ℕ` of published bytes wants. -/
+lemma toNat_getElem_toBeBytesFixed (n w i : ℕ) (h : i < (toBeBytesFixed n w).length) :
+    ((toBeBytesFixed n w)[i]).toNat = n / 256 ^ (w - 1 - i) % 256 := by
+  rw [getElem_toBeBytesFixed]
+  simp
+
+@[simp] lemma toLeBytesFixed_zero (w : ℕ) : toLeBytesFixed 0 w = List.replicate w 0 := by
+  induction w with
+  | zero => rfl
+  | succ w ih => simp [toLeBytesFixed, ih, List.replicate_succ]
+
+/-- `zeroPadBytes` commutes with `cons` once the width has a successor to spend. -/
+private lemma zeroPadBytes_cons (w : ℕ) (b : UInt8) (bs : List UInt8) :
+    zeroPadBytes (w + 1) (b :: bs) = b :: zeroPadBytes w bs := by
+  simp [zeroPadBytes]
+
+/-- The equation for `toBytes'` at a successor, restated with `UInt8.ofNat` in
+place of the raw `UInt8` constructor the definition uses. -/
+private lemma toBytes'_succ (m : ℕ) :
+    toBytes' (m + 1) = UInt8.ofNat ((m + 1) % 256) :: toBytes' ((m + 1) / 256) := by
+  conv_lhs => unfold toBytes'
+  refine congrArg (· :: _) ?_
+  refine UInt8.toNat_inj.mp ?_
+  show (m + 1) % UInt8.size = _
+  simp [UInt8.size, Nat.mod_eq_of_lt (Nat.mod_lt (m + 1) (by norm_num : 0 < 256))]
+
+/-- The one place `toBytes'` still appears: the variable-length private expansion
+is the fixed-width public one with the leading zeroes dropped. -/
+private lemma zeroPadBytes_toBytes' (w : ℕ) :
+    ∀ n : ℕ, n < 256 ^ w → zeroPadBytes w (toBytes' n) = toLeBytesFixed n w := by
+  induction w with
+  | zero =>
+    intro n h
+    have hn : n = 0 := by simpa using h
+    subst hn
+    simp [toBytes', zeroPadBytes, toLeBytesFixed]
+  | succ w ih =>
+    intro n h
+    match n with
+    | 0 => simp [toBytes', zeroPadBytes, toLeBytesFixed, List.replicate_succ]
+    | m + 1 =>
+      have hlt : (m + 1) / 256 < 256 ^ w :=
+        Nat.div_lt_of_lt_mul (by rw [← pow_succ']; exact h)
+      rw [toBytes'_succ, zeroPadBytes_cons, ih _ hlt]
+      rfl
+
+/-- **The bridge.** The fixed-width big-endian expansion is the variable-length
+one (`toBytesBigEndian`) left-padded with zeroes — which is exactly the shape
+`UInt256.toByteArray` is built in. -/
+theorem toBeBytesFixed_eq_zeroPad (n w : ℕ) (h : n < 256 ^ w) :
+    toBeBytesFixed n w
+      = List.replicate (w - (toBytesBigEndian n).length) 0 ++ toBytesBigEndian n := by
+  unfold toBeBytesFixed
+  rw [← zeroPadBytes_toBytes' w n h]
+  simp [zeroPadBytes, toBytesBigEndian, List.reverse_append]
+
+/-- `toBytes!` — the public 32-wide little-endian encoder — is `toLeBytesFixed`,
+so its digits are given by `getElem_toLeBytesFixed`. -/
+theorem toBytes!_eq_toLeBytesFixed (v : UInt256) :
+    toBytes! v = toLeBytesFixed v.toNat 32 :=
+  zeroPadBytes_toBytes' 32 v.toNat (by
+    rw [show (256 : ℕ) ^ 32 = UInt256.size from by norm_num [UInt256.size]]
+    exact v.val.isLt)
+
 def uInt256OfByteArray (arr : ByteArray) : UInt256 :=
   .ofNat <| fromBytes' arr.data.toList.reverse
 

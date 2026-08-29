@@ -233,4 +233,23 @@ theorem H_return_step_MSTORE_RETURN_zero (f₁ g₁ f₂ g₂ : ℕ) (pre : Stat
   H_return_step_MSTORE_RETURN f₁ g₁ f₂ g₂ pre s s' ⟨0⟩ sval len hpop hpop' hlen
     (by show (0 : ℕ) ≤ _; exact Nat.zero_le _)
 
+/-- **The canonical fragment with the returned word opened up.** Same run as
+`H_return_step_MSTORE_RETURN_zero`, but the conclusion names the 32 base-256
+digits of `sval` instead of the opaque `sval.toByteArray`. A correspondence proof
+whose abstract side publishes a big-endian encoding matches against this one. -/
+theorem H_return_step_MSTORE_RETURN_zero_digits (f₁ g₁ f₂ g₂ : ℕ) (pre : State)
+    (s s' : Stack UInt256) (sval len : UInt256)
+    (hpop : pre.stack.pop2 = some (s, ⟨0⟩, sval))
+    (hpop' : s.pop2 = some (s', ⟨0⟩, len))
+    (hlen : len.toNat = 32) :
+    ∃ post, Runs [(f₁ + 1, g₁, (.MSTORE, none)), (f₂ + 1, g₂, (.RETURN, none))] pre post
+      ∧ post.H_return.size = 32
+      ∧ (List.range post.H_return.size).map (fun i => (post.H_return.get! i).toNat)
+          = (List.range 32).map (fun i => sval.toNat / 256 ^ (32 - 1 - i) % 256) := by
+  obtain ⟨post, hruns, hret⟩ :=
+    H_return_step_MSTORE_RETURN_zero f₁ g₁ f₂ g₂ pre s s' sval len hpop hpop' hlen
+  refine ⟨post, hruns, ?_, ?_⟩
+  · rw [hret]; exact UInt256.size_toByteArray sval
+  · rw [hret]; exact UInt256.map_toNat_get!_toByteArray sval
+
 end EvmYul.EVM.Proof
