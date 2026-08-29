@@ -321,6 +321,15 @@ private lemma toBytes'_le {k : ℕ} (h : n < 2 ^ (8 * k)) : (toBytes' n).length 
 -- | If n < 2²⁵⁶, then (toBytes' n).length ≤ 32.
 private lemma toBytes'_UInt256_le (h : n < UInt256.size) : (toBytes' n).length ≤ 32 := toBytes'_le h
 
+/-- The big-endian byte expansion of a value below `UInt256.size` fits in 32 bytes.
+
+`toBytes'` is private to this module, so downstream files cannot derive this from
+`toBytes'_UInt256_le` themselves; it is exported here because `UInt256.toByteArray`
+zero-pads against exactly this bound. -/
+theorem length_toBytesBigEndian_le (h : n < UInt256.size) :
+    (toBytesBigEndian n).length ≤ 32 := by
+  simpa [toBytesBigEndian] using toBytes'_UInt256_le h
+
 -- | Zero-pad a list of bytes up to some length, adding the zeroes on the right.
 private def zeroPadBytes (n : ℕ) (bs : List UInt8) : List UInt8 :=
   bs ++ (List.replicate (n - bs.length)) 0
