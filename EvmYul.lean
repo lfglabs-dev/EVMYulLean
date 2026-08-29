@@ -33,6 +33,7 @@ import EvmYul.EVM.GasConstants
 import EvmYul.EVM.Proof.Execution
 import EvmYul.EVM.Proof.Block
 import EvmYul.EVM.Proof.Memory
+import EvmYul.EVM.Proof.MemoryStep
 
 import EvmYul.Maps.AccountMap
 import EvmYul.Maps.ByteMap
