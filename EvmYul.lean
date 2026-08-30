@@ -31,6 +31,7 @@ import EvmYul.EVM.PrecompiledContracts
 import EvmYul.EVM.Gas
 import EvmYul.EVM.GasConstants
 import EvmYul.EVM.Proof.Execution
+import EvmYul.EVM.Proof.Observation
 import EvmYul.EVM.Proof.Block
 import EvmYul.EVM.Proof.Memory
 import EvmYul.EVM.Proof.MemoryStep
