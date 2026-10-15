@@ -17,8 +17,9 @@ selector or claim support for forks activating different collision rules.
 Run the native regression and mutations:
 
 ```sh
+python3 -m pip install -r requirements-native-tests.txt
 lake build create2OsakaChecks EvmYul.FFI.ffi:dynlib
-lake exe create2OsakaChecks
+python3 scripts/check_create2_osaka_runtime.py --output .lake/create2-osaka-runtime
 python3 scripts/check_create2_osaka_mutations.py --output .lake/create2-osaka-mutations
 ```
 
@@ -47,3 +48,9 @@ each detected runtime failure must repeat identically on replay.
 This is component conformance, not a whole-transaction or Solidity importer
 correctness theorem. It does not justify treating native execution as an oracle
 for an independently computed canonical model.
+
+The executable loads the existing elliptic-curve Python helpers during module
+initialization even though these cases do not call elliptic-curve precompiles.
+Install the documented Python dependencies before execution. The runtime
+checker requires exactly the successful regression output and no stderr; it
+rejects initialization panics even when the executable exits with status zero.
