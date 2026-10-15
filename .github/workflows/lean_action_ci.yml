@@ -12,3 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: leanprover/lean-action@v1
+      - name: CREATE2 Osaka native regressions and semantic mutations
+        run: |
+          python3 -m pip install -r requirements-native-tests.txt
+          lake build create2OsakaChecks EvmYul.FFI.ffi:dynlib
+          python3 scripts/check_create2_osaka_runtime.py --output .lake/create2-osaka-runtime
+          python3 scripts/check_create2_osaka_mutations.py --output .lake/create2-osaka-mutations

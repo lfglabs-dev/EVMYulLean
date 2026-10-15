@@ -74,3 +74,7 @@ lean_exe «conform» where
 
 lean_exe «yulSemanticsTests» where
   root := `EvmYul.Yul.YulSemanticsTests.Main
+
+/-- Native Osaka target-account regression, including storage-only creation. -/
+lean_exe «create2OsakaChecks» where
+  root := `Conform.Create2OsakaChecks
