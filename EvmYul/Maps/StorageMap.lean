@@ -30,13 +30,13 @@ namespace EvmYul
 
 section RemoveLater
 
-abbrev Storage : Type := Std.TreeMap UInt256 UInt256 compare
+abbrev Storage : Type := Std.TreeMap UInt256 UInt256 uint256Cmp
 
 def Storage.toFinmap (self : Storage) : Finmap (λ _ : UInt256 ↦ UInt256) :=
-  self.foldl (init := ∅) λ acc k v ↦ acc.insert (UInt256.ofNat k.1) v
+  self.foldl (init := ∅) λ acc k v ↦ acc.insert (UInt256.ofNat k.toNat) v
 
 def Storage.toEvmYulStorage (self : Storage) : EvmYul.Storage :=
-  self.foldl (init := ∅) λ acc k v ↦ acc.insert (UInt256.ofNat k.1) v
+  self.foldl (init := ∅) λ acc k v ↦ acc.insert (UInt256.ofNat k.toNat) v
 
 def toBlobs (pair : UInt256 × UInt256) : Option (String × String) := do
   let kec := ffi.KEC pair.1.toByteArray

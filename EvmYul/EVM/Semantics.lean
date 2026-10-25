@@ -119,7 +119,7 @@ private def BitVec.ofFn {k} (x : Fin k → Bool) : BitVec k :=
           (·.1) <| vec.toList.foldl (init := (0, 0)) λ (res, i) bit ↦ (res + 2^i * bit.toNat, i + 1)
 
 def byteAt (μ₀ μ₁ : UInt256) : UInt256 :=
-  let v₁ : BitVec 256 := BitVec.ofNat 256 μ₁.1
+  let v₁ : BitVec 256 := μ₁.toBitVec
   let vᵣ : BitVec 256 := BitVec.ofFn (λ i => if i >= 248 && μ₀ < ⟨32⟩
                                              then v₁.getLsbD i
                                              else false)
@@ -617,18 +617,15 @@ def Lambda
   let existentAccount := σ.getD a default
 
   /-
-    https://eips.ethereum.org/EIPS/eip-7610
-    If a contract creation is attempted due to a creation transaction,
-    the CREATE opcode, the CREATE2 opcode, or any other reason,
-    and the destination address already has either a nonzero nonce,
-    a nonzero code length, or non-empty storage, then the creation MUST throw
-    as if the first byte in the init code were an invalid opcode.
+    Osaka follows EIP-684: only a nonzero nonce or nonempty code causes a
+    creation collision. A storage-only preexisting account is replaced with
+    fresh persistent storage when constructor execution succeeds. Future
+    storage-collision proposals must not be applied without a fork gate.
   -/
   let (i, createdAccounts) :=
     if
       existentAccount.nonce ≠ ⟨0⟩
         || existentAccount.code.size ≠ 0
-        || existentAccount.storage != default
     then
       (⟨#[0xfe]⟩, createdAccounts)
     else (i, createdAccounts.insert a)
@@ -637,6 +634,7 @@ def Lambda
     { existentAccount with
         nonce := existentAccount.nonce + ⟨1⟩
         balance := v + existentAccount.balance
+        storage := default
     }
 
   -- If `v` ≠ 0 then the sender must have passed the `INSUFFICIENT_ACCOUNT_FUNDS` check

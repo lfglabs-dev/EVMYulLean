@@ -219,8 +219,8 @@ def swap (n : ℕ) : Transformer .EVM :=
 def step {τ : OperationType} (op : Operation τ) (arg : Option (UInt256 × Nat) := .none) : Transformer τ := Id.run do
   let _ : Id Unit := -- For debug logging
     match τ with
-      | .EVM => dbg_trace op.pretty; pure ()
-      | .Yul => dbg_trace op.pretty; pure ()
+      | .EVM => pure ()
+      | .Yul => pure ()
   match τ, op with
     -- TODO: Revisit STOP, this is likely not the best way to do it.
     | τ, .STOP =>

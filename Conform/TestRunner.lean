@@ -1,6 +1,7 @@
 import EvmYul.EVM.State
 import EvmYul.EVM.Semantics
 import EvmYul.EVM.Gas
+import EvmYul.Specs.ConformMultiFork
 import EvmYul.Wheels
 
 import EvmYul.State.TransactionOps
@@ -197,6 +198,7 @@ def validateTransaction
   (header : BlockHeader)
   (totalGasUsedInBlock : ℕ)
   (T : Transaction)
+  (fork : EVM.Fork := .Cancun)
   : Except EVM.Exception AccountAddress
 := do
   let H_f := header.baseFeePerGas
@@ -218,7 +220,7 @@ def validateTransaction
   if H_f > maxFeePerGas.toNat then
     throw <| .TransactionException .INSUFFICIENT_MAX_FEE_PER_GAS
 
-  let g₀ : ℕ := EVM.intrinsicGas T
+  let g₀ : ℕ := EVM.intrinsicGas T fork
   if T.base.gasLimit.toNat < g₀ then
     throw <| .TransactionException .INTRINSIC_GAS_TOO_LOW
   match T with
@@ -462,6 +464,7 @@ def processBlocks
   (pre : Pre)
   (blocks : RawBlocks)
   (genesisRLP : ByteArray)
+  (fork : EVM.Fork := .Cancun)
   : Except EVM.Exception EVM.State
 := do
   let (genesisHash, genesisBlockHeader, _) ← deserializeBlock genesisRLP
@@ -483,7 +486,7 @@ def processBlocks
           let block ← deserializeRawBlock rawBlock
           let parent ←
             validateHeaderBeforeTransactions accState.blocks block.blockHeader
-          let accState ← processBlock {accState with accountMap := parent.σ} block
+          let accState ← processBlock {accState with accountMap := parent.σ} block fork
           validateBlock accState parent.blockHeader block
           if ¬block.exception.isEmpty then
             throw <| .MissedExpectedException block.exception
@@ -508,6 +511,7 @@ def processBlocks
   processBlock
     (s₀ : EVM.State)
     (block : DeserializedBlock)
+    (fork : EVM.Fork)
     : Except EVM.Exception EVM.State
   := do
     -- Beacon call
@@ -561,6 +565,7 @@ def processBlocks
               block.blockHeader
               s'.totalGasUsedInBlock
               trans
+              fork
           executeTransaction trans S_T s' block.blockHeader
         )
         {s with totalGasUsedInBlock := 0, transactionReceipts := .empty}
@@ -576,10 +581,10 @@ def processBlocks
 
 NB we can throw away the final state if it coincided with the expected one, hence `.none`.
 -/
-def preImpliesPost (entry : TestEntry)
+def preImpliesPost (entry : TestEntry) (fork : EVM.Fork := .Cancun)
   : Except EVM.Exception (Option (PersistentAccountMap .EVM))
 := do
-    let resultState ← processBlocks entry.pre entry.blocks entry.genesisRLP
+    let resultState ← processBlocks entry.pre entry.blocks entry.genesisRLP fork
     let lastAccountMap :=
       resultState.blocks.findRev? (·.hash == entry.lastblockhash)
       |>.option resultState.accountMap ProcessedBlock.σ
@@ -611,9 +616,9 @@ instance (priority := high) : Repr (PersistentAccountMap .EVM) := ⟨λ m _ ↦
         result := result ++ s!"{sk} → {sv}\n"
     return result⟩
  
-def processTest (entry : TestEntry) (isTimed : Option (Nat × TestId) := .none) (verbose := true) : IO TestResult := do
+def processTest (entry : TestEntry) (isTimed : Option (Nat × TestId) := .none) (verbose := true) (fork : EVM.Fork := .Cancun) : IO TestResult := do
   let tα ← if isTimed.isSome then IO.monoMsNow else pure 0
-  let result := preImpliesPost entry
+  let result := preImpliesPost entry fork
   let tω ← if isTimed.isSome then IO.monoMsNow else pure 0
   if let .some (thread, filepath, testname) := isTimed then
     IO.eprint s!"#{if thread / 10 == 1 then "" else " "}{thread} "
@@ -643,8 +648,12 @@ def processTests (tests : Array TestId) (isTimed : Option Nat := .none) :
     match test with
     | .error _ => IO.eprintln s!"Cannot parse: {testId}"
                   discarded := discarded.push testId
-    | .ok test => if test.network.startsWith "Cancun"
-                  then results := results.push (testId, ←processTest test <| isTimed <&> (·, testId))
+    | .ok test =>
+      match EVM.Fork.ofNetworkString test.network with
+      | none => pure ()
+      | some fork =>
+        results := results.push
+          (testId, ←processTest test (isTimed <&> (·, testId)) (fork := fork))
   return (discarded, results)
 
 end Conform
