@@ -21,7 +21,7 @@ jobs:
           test: false
       - name: Build Conform and Yul test targets and run native Osaka CREATE2 checks
         run: |
-          ~/.elan/bin/lake build Conform yulSemanticsTests EvmYul.FFI.ffi:dynlib Conform.Create2OsakaChecks
+          ~/.elan/bin/lake build conform yulSemanticsTests EvmYul.FFI.ffi:dynlib Conform.Create2OsakaChecks
           out="$(~/.elan/bin/lake env lean --load-dynlib=.lake/build/lib/libleanffi.so --load-dynlib=.lake/build/lib/lean/evmyul_EvmYul_FFI_ffi.so --run Conform/Create2OsakaChecks.lean 2>&1)"
           printf '%s\n' "$out"
           test "$out" = "Osaka CREATE2 storage reset and nonce/code collision checks passed:4"
