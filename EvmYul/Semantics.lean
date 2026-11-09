@@ -323,8 +323,14 @@ def step {τ : OperationType} (op : Operation τ) (arg : Option (UInt256 × Nat)
       λ yulState lits ↦
         match lits with
           | [a, b, c] => do
-            let mState' := yulState.toSharedState.toMachineState.returndatacopy a b c
-            .ok <| (yulState.setMachineState mState', .none)
+            let mState := yulState.toSharedState.toMachineState
+            -- EIP-211: reading past the end of the return-data buffer is an
+            -- exceptional halt (mirrors the EVM check in `EVM.Semantics`).
+            if b.toNat + c.toNat > mState.returnData.size then
+              .error .InvalidMemoryAccess
+            else
+              let mState' := mState.returndatacopy a b c
+              .ok <| (yulState.setMachineState mState', .none)
           | _ => .error .InvalidArguments
     | .EVM, .EXTCODEHASH => dispatchUnaryStateOp .EVM EvmYul.State.extCodeHash
 
