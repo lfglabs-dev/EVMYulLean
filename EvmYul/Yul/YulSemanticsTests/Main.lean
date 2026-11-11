@@ -1244,6 +1244,18 @@ def test₅ :=
   | .error e => repr e
   | .ok s => s!"{s.toSharedState.accountMap.toList.map (fun (a : AccountAddress × Account .Yul) => repr a.1 ++ " " ++ repr a.2.storage.toList)}"
 
+/-- EIP-211: `RETURNDATACOPY` past the end of the (here empty) return-data
+buffer is an exceptional halt. -/
+def test₆ :=
+  match primCall 99 stateEg₁ .RETURNDATACOPY [⟨0⟩, ⟨0⟩, ⟨32⟩] with
+  | .error e => repr e
+  | .ok _ => "ok"
+
+/-- A zero-length `RETURNDATACOPY` at offset 0 stays in bounds. -/
+def test₇ :=
+  match primCall 99 stateEg₁ .RETURNDATACOPY [⟨0⟩, ⟨0⟩, ⟨0⟩] with
+  | .error e => repr e
+  | .ok _ => "ok"
 
 end Yul
 
@@ -1259,3 +1271,5 @@ def main : IO Unit := do
   IO.println (s!"test₃: {test₃} -- " ++ (if s!"{test₃}" = "StaticModeViolation" then "Success" else "Failure"))
   IO.println (s!"test₄: {test₄} -- " ++ (if s!"{test₄}" = "[1 [], 2 [(0, 5)], 3 [], 4 []]" then "Success" else "Failure"))
   IO.println (s!"test₅: {test₅} -- " ++ (if s!"{test₅}" = "[1 [], 2 [(0, 5)], 3 [], 4 []]" then "Success" else "Failure"))
+  IO.println (s!"test₆: {test₆} -- " ++ (if s!"{test₆}" = "InvalidMemoryAccess" then "Success" else "Failure"))
+  IO.println (s!"test₇: {test₇} -- " ++ (if s!"{test₇}" = "ok" then "Success" else "Failure"))
