@@ -238,7 +238,7 @@ def Ξ_BN_ADD
         -- (σ, g - gᵣ, A, .empty)
         (false, ∅, ⟨0⟩, A, .empty)
 
-private def bn_addOutput₀ :=
+private def bn_addOutput₀ (_ : Unit) :=
   let (_, _, _, _, o) :=
     Ξ_BN_ADD
       default
@@ -254,14 +254,14 @@ private def bn_addOutput₀ :=
   x₂ : ByteArray := UInt256.toByteArray ⟨1⟩
   y₂ : ByteArray := UInt256.toByteArray ⟨2⟩
 
-private def bn_addOutput₁ :=
+private def bn_addOutput₁ (_ : Unit) :=
   let (_, _, _, _, o) :=
     Ξ_BN_ADD
       default
       ⟨3000⟩
       default
       { (default : ExecutionEnv .EVM) with
-        calldata := bn_addOutput₀ ++ x ++ y
+        calldata := bn_addOutput₀ () ++ x ++ y
       }
   o
  where
@@ -292,7 +292,7 @@ def Ξ_BN_MUL
         -- (σ, g - gᵣ, A, .empty)
         (false, ∅, ⟨0⟩, A, .empty)
 
-private def bn_mulOutput :=
+private def bn_mulOutput (_ : Unit) :=
   let (_, _, _, _, o) :=
     Ξ_BN_MUL
       default
@@ -329,7 +329,7 @@ def Ξ_SNARKV
         dbg_trace s!"Ξ_SNARKV failed: {e}"
         (false, ∅, ⟨0⟩, A, .empty)
 
-private def snarkvOutput :=
+private def snarkvOutput (_ : Unit) :=
   let (_, _, _, _, o) :=
     Ξ_SNARKV
       default
